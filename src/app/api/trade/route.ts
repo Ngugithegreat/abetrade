@@ -5,9 +5,11 @@ import { getLatestTick } from "@/lib/deriv-server";
 import {
   MARKETS,
   DURATIONS,
+  MULTIPLIERS,
   PAYOUT_MULTIPLIER,
   MIN_STAKE,
   MAX_STAKE,
+  stopOutPrice,
 } from "@/lib/markets";
 
 export const runtime = "nodejs";
@@ -26,22 +28,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
+  const kind = body.kind === "mult" ? "mult" : "rise_fall";
   const symbol = String(body.symbol || "");
   const direction = String(body.direction || "");
   const stake = Math.round(Number(body.stake));
-  const duration = Math.round(Number(body.duration));
 
   if (!MARKETS.some((m) => m.symbol === symbol)) {
     return NextResponse.json({ error: "Unknown market." }, { status: 400 });
   }
-  if (direction !== "rise" && direction !== "fall") {
-    return NextResponse.json({ error: "Direction must be rise or fall." }, { status: 400 });
-  }
   if (!Number.isFinite(stake) || stake < MIN_STAKE || stake > MAX_STAKE) {
     return NextResponse.json({ error: "Stake is outside the allowed range." }, { status: 400 });
   }
-  if (!DURATIONS.some((d) => d.seconds === duration)) {
-    return NextResponse.json({ error: "Unsupported duration." }, { status: 400 });
+
+  // Contract-specific validation.
+  let duration = 0;
+  let multiplier: number | null = null;
+  if (kind === "rise_fall") {
+    if (direction !== "rise" && direction !== "fall") {
+      return NextResponse.json({ error: "Direction must be rise or fall." }, { status: 400 });
+    }
+    duration = Math.round(Number(body.duration));
+    if (!DURATIONS.some((d) => d.seconds === duration)) {
+      return NextResponse.json({ error: "Unsupported duration." }, { status: 400 });
+    }
+  } else {
+    if (direction !== "up" && direction !== "down") {
+      return NextResponse.json({ error: "Direction must be up or down." }, { status: 400 });
+    }
+    multiplier = Math.round(Number(body.multiplier));
+    if (!MULTIPLIERS.includes(multiplier)) {
+      return NextResponse.json({ error: "Unsupported multiplier." }, { status: 400 });
+    }
   }
 
   await ensureSchema();
@@ -70,17 +87,30 @@ export async function POST(req: Request) {
   }
   const newBalance = Number(debit[0].balance);
 
-  const payout = Math.round(stake * PAYOUT_MULTIPLIER);
-  const expiry = entry.epoch + duration;
-
-  const rows = (await sql`
-    INSERT INTO trades
-      (user_id, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status)
-    VALUES
-      (${session.id}, ${symbol}, ${direction}, ${stake}, ${payout},
-       ${entry.price}, ${entry.epoch}, ${expiry}, 'open')
-    RETURNING *
-  `) as any[];
+  let rows: any[];
+  if (kind === "rise_fall") {
+    const payout = Math.round(stake * PAYOUT_MULTIPLIER);
+    const expiry = entry.epoch + duration;
+    rows = (await sql`
+      INSERT INTO trades
+        (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status)
+      VALUES
+        (${session.id}, 'rise_fall', ${symbol}, ${direction}, ${stake}, ${payout},
+         ${entry.price}, ${entry.epoch}, ${expiry}, 'open')
+      RETURNING *
+    `) as any[];
+  } else {
+    const so = stopOutPrice(direction as "up" | "down", entry.price, multiplier!);
+    rows = (await sql`
+      INSERT INTO trades
+        (user_id, kind, symbol, direction, stake, payout, multiplier, entry_price,
+         entry_epoch, expiry_epoch, stop_out_price, status)
+      VALUES
+        (${session.id}, 'mult', ${symbol}, ${direction}, ${stake}, 0, ${multiplier},
+         ${entry.price}, ${entry.epoch}, 0, ${so}, 'open')
+      RETURNING *
+    `) as any[];
+  }
 
   await sql`
     INSERT INTO transactions (user_id, type, amount, status, method, note)

@@ -6,18 +6,38 @@ import { neon, NeonQueryFunction } from "@neondatabase/serverless";
 let _sql: NeonQueryFunction<false, false> | null = null;
 let _migrated = false;
 
+// Accept whatever a Postgres provider injects. Vercel's one-click Postgres
+// (Neon) sets POSTGRES_URL automatically, so adding a database from the Vercel
+// Storage tab wires this up with zero manual copying.
+const DB_URL_VARS = [
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+  "NEON_DATABASE_URL",
+];
+
+export function dbUrl(): string | undefined {
+  for (const v of DB_URL_VARS) {
+    const val = process.env[v];
+    if (val) return val;
+  }
+  return undefined;
+}
+
 export function hasDb(): boolean {
-  return !!process.env.DATABASE_URL;
+  return !!dbUrl();
 }
 
 function getSql(): NeonQueryFunction<false, false> {
-  if (!process.env.DATABASE_URL) {
+  const url = dbUrl();
+  if (!url) {
     throw new Error(
-      "DATABASE_URL is not set. Add a Postgres connection string (e.g. from neon.tech) to your environment."
+      "No Postgres connection string found. In Vercel open the Storage tab and create a Postgres database (it sets POSTGRES_URL automatically), or add DATABASE_URL yourself."
     );
   }
   if (!_sql) {
-    _sql = neon(process.env.DATABASE_URL);
+    _sql = neon(url);
   }
   return _sql;
 }
@@ -74,6 +94,11 @@ export async function ensureSchema(): Promise<void> {
   // existing databases upgrade cleanly).
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS provider_ref TEXT`;
   await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt TEXT`;
+
+  // Multipliers contract support on trades.
+  await sql`ALTER TABLE trades ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'rise_fall'`;
+  await sql`ALTER TABLE trades ADD COLUMN IF NOT EXISTS multiplier INTEGER`;
+  await sql`ALTER TABLE trades ADD COLUMN IF NOT EXISTS stop_out_price DOUBLE PRECISION`;
 
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON trades(user_id, created_at DESC)`;

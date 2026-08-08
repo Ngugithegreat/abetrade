@@ -13,11 +13,7 @@ export function HistoryView() {
   const losses = trades.filter((t) => t.status === "lost").length;
   const settled = wins + losses;
   const winRate = settled ? Math.round((wins / settled) * 100) : 0;
-  const pnl = trades.reduce((sum, t) => {
-    if (t.status === "won") return sum + (Number(t.payout) - Number(t.stake));
-    if (t.status === "lost") return sum - Number(t.stake);
-    return sum;
-  }, 0);
+  const pnl = trades.reduce((sum, t) => sum + tradeProfit(t), 0);
 
   return (
     <div className="space-y-5">
@@ -52,19 +48,33 @@ export function HistoryView() {
   );
 }
 
+// rise_fall stores the *potential* payout even on a loss, so derive profit by
+// kind; multipliers store the actual credited amount in `payout`.
+function tradeProfit(t: Trade): number {
+  if (t.kind === "mult") return Number(t.payout) - Number(t.stake);
+  return t.status === "won" ? Number(t.payout) - Number(t.stake) : -Number(t.stake);
+}
+
 function TradeRow({ t }: { t: Trade }) {
   const m = marketBySymbol(t.symbol);
   const won = t.status === "won";
-  const profit = won ? Number(t.payout) - Number(t.stake) : -Number(t.stake);
+  const profit = tradeProfit(t);
+  const up = t.direction === "rise" || t.direction === "up";
+  const dirLabel =
+    t.kind === "mult"
+      ? `${up ? "Up" : "Down"} ×${t.multiplier}`
+      : up
+      ? "Rise"
+      : "Fall";
   return (
     <div className="flex items-center justify-between px-5 py-3">
       <div className="flex items-center gap-3">
         <div
           className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-            t.direction === "rise" ? "bg-up/15 text-up" : "bg-down/15 text-down"
+            up ? "bg-up/15 text-up" : "bg-down/15 text-down"
           }`}
         >
-          {t.direction === "rise" ? (
+          {up ? (
             <ArrowUp className="h-4 w-4" />
           ) : (
             <ArrowDown className="h-4 w-4" />
@@ -73,9 +83,7 @@ function TradeRow({ t }: { t: Trade }) {
         <div>
           <div className="text-sm font-semibold">
             {m?.short ?? t.symbol}{" "}
-            <span className="font-normal text-muted">
-              {t.direction === "rise" ? "Rise" : "Fall"}
-            </span>
+            <span className="font-normal text-muted">{dirLabel}</span>
           </div>
           <div className="tabular text-[11px] text-muted">
             {Number(t.entry_price).toFixed(2)} →{" "}

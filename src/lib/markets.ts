@@ -37,3 +37,37 @@ export const DURATIONS = [
 // Stake limits in cents.
 export const MIN_STAKE = 50; // $0.50
 export const MAX_STAKE = 500000; // $5,000
+
+// ---- Multipliers ----
+// Your P&L moves `multiplier`× as fast as the market. If the market moves
+// (1 / multiplier) against you, the position stops out and you lose your stake —
+// but never more than your stake. You close a position whenever you like.
+export const MULTIPLIERS = [100, 200, 400, 1000];
+export const DEFAULT_MULTIPLIER = 100;
+
+export function stopOutPrice(
+  direction: "up" | "down",
+  entry: number,
+  multiplier: number
+): number {
+  // Loss reaches 100% of stake when (Δ/entry) = 1/multiplier against you.
+  const frac = 1 / multiplier;
+  return direction === "up" ? entry * (1 - frac) : entry * (1 + frac);
+}
+
+/**
+ * P&L in cents for an open multiplier position at `current` price.
+ * Clamped so a loss can never exceed the stake (the stop-out guarantee).
+ */
+export function multiplierPnl(opts: {
+  direction: "up" | "down";
+  entry: number;
+  current: number;
+  stakeCents: number;
+  multiplier: number;
+}): number {
+  const change = (opts.current - opts.entry) / opts.entry;
+  const dirChange = opts.direction === "up" ? change : -change;
+  const pnl = Math.round(opts.stakeCents * opts.multiplier * dirChange);
+  return Math.max(-opts.stakeCents, pnl);
+}

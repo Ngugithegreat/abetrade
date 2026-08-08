@@ -22,14 +22,17 @@ export type Txn = {
 
 export type Trade = {
   id: number;
+  kind: "rise_fall" | "mult";
   symbol: string;
-  direction: "rise" | "fall";
+  direction: string; // rise|fall or up|down
   stake: number;
   payout: number;
+  multiplier: number | null;
   entry_price: number;
   exit_price: number | null;
   entry_epoch: number;
   expiry_epoch: number;
+  stop_out_price: number | null;
   status: "open" | "won" | "lost";
   created_at: string;
   settled_at: string | null;

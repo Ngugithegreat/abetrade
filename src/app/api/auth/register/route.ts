@@ -31,11 +31,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const role =
+    // Admin if the email matches ADMIN_EMAIL, OR if this is the very first
+    // account (so the site owner always ends up with an admin login).
+    const isAdminEmail =
       process.env.ADMIN_EMAIL &&
-      cleanEmail === process.env.ADMIN_EMAIL.trim().toLowerCase()
-        ? "admin"
-        : "user";
+      cleanEmail === process.env.ADMIN_EMAIL.trim().toLowerCase();
+    const countRows = (await sql`SELECT COUNT(*)::int AS n FROM users`) as Array<{ n: number }>;
+    const isFirstUser = (countRows[0]?.n ?? 0) === 0;
+    const role = isAdminEmail || isFirstUser ? "admin" : "user";
 
     const hash = await hashPassword(String(password));
 

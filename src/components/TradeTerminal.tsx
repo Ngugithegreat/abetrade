@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, ArrowDown, Zap, Timer, Wallet } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowUp, ArrowDown, Zap, Timer, Wallet, X, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useApp, Trade } from "./app-context";
 import { useDerivFeed } from "@/lib/useDerivFeed";
@@ -9,21 +9,27 @@ import { PriceChart } from "./PriceChart";
 import {
   MARKETS,
   DURATIONS,
+  MULTIPLIERS,
+  DEFAULT_MULTIPLIER,
   PAYOUT_MULTIPLIER,
   MIN_STAKE,
   MAX_STAKE,
   marketBySymbol,
+  multiplierPnl,
 } from "@/lib/markets";
 import { money, cents } from "@/lib/format";
 
 const QUICK_STAKES = [1, 5, 10, 50];
+type Contract = "rise_fall" | "mult";
 
 export function TradeTerminal() {
   const { balance, setBalance, data, refresh, loading } = useApp();
   const [symbol, setSymbol] = useState("R_100");
+  const [contract, setContract] = useState<Contract>("rise_fall");
   const [stake, setStake] = useState("1");
   const [duration, setDuration] = useState(60);
-  const [placing, setPlacing] = useState<"rise" | "fall" | null>(null);
+  const [multiplier, setMultiplier] = useState(DEFAULT_MULTIPLIER);
+  const [placing, setPlacing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const feed = useDerivFeed(symbol);
@@ -38,32 +44,40 @@ export function TradeTerminal() {
     stakeCents >= MIN_STAKE && stakeCents <= MAX_STAKE && stakeCents <= balance;
 
   const openTrades = data?.openTrades ?? [];
+  const hasOpenMult = openTrades.some((t) => t.kind === "mult");
 
   const showToast = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3200);
   }, []);
 
-  async function place(direction: "rise" | "fall") {
+  // Keep open multiplier P&L / stop-outs fresh by polling the wallet.
+  useEffect(() => {
+    if (!hasOpenMult) return;
+    const id = setInterval(() => refresh(), 6000);
+    return () => clearInterval(id);
+  }, [hasOpenMult, refresh]);
+
+  async function place(direction: string) {
     if (!stakeValid || placing) return;
     setPlacing(direction);
     try {
+      const payloadBody =
+        contract === "rise_fall"
+          ? { kind: "rise_fall", symbol, direction, stake: stakeCents, duration }
+          : { kind: "mult", symbol, direction, stake: stakeCents, multiplier };
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol, direction, stake: stakeCents, duration }),
+        body: JSON.stringify(payloadBody),
       });
       const json = await res.json();
       if (!res.ok) {
         showToast(json.error || "Trade failed.", false);
       } else {
         if (typeof json.balance === "number") setBalance(json.balance);
-        showToast(
-          `${direction === "rise" ? "Rise" : "Fall"} placed on ${market.short} · ${money(
-            stakeCents
-          )}`,
-          true
-        );
+        const label = direction.toUpperCase();
+        showToast(`${label} placed on ${market.short} · ${money(stakeCents)}`, true);
         refresh();
       }
     } catch {
@@ -72,6 +86,8 @@ export function TradeTerminal() {
       setPlacing(null);
     }
   }
+
+  const stopOutPct = (100 / multiplier).toFixed(multiplier >= 1000 ? 2 : 2);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
@@ -86,9 +102,7 @@ export function TradeTerminal() {
                 <h2 className="text-lg font-bold">{market.name}</h2>
                 <span
                   className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    feed.connected
-                      ? "bg-up/10 text-up"
-                      : "bg-muted/10 text-muted"
+                    feed.connected ? "bg-up/10 text-up" : "bg-muted/10 text-muted"
                   }`}
                 >
                   <span
@@ -99,7 +113,9 @@ export function TradeTerminal() {
                   {feed.connected ? "LIVE" : "connecting"}
                 </span>
               </div>
-              <div className="text-xs text-muted">{market.volatility} volatility · synthetic index</div>
+              <div className="text-xs text-muted">
+                {market.volatility} volatility · synthetic index
+              </div>
             </div>
             <div className="text-right">
               <div
@@ -107,7 +123,9 @@ export function TradeTerminal() {
                   rising ? "text-up" : "text-down"
                 }`}
               >
-                {feed.last ? feed.last.price.toFixed(market.symbol === "R_10" ? 3 : 2) : "—"}
+                {feed.last
+                  ? feed.last.price.toFixed(market.symbol === "R_10" ? 3 : 2)
+                  : "—"}
               </div>
               <div className={`text-xs ${rising ? "text-up" : "text-down"}`}>
                 {rising ? "▲" : "▼"} live tick
@@ -120,8 +138,14 @@ export function TradeTerminal() {
           </div>
         </div>
 
-        {/* Open positions */}
-        <OpenPositions trades={openTrades} onSettled={refresh} liveSymbol={symbol} livePrice={feed.last?.price ?? null} />
+        <OpenPositions
+          trades={openTrades}
+          onSettled={refresh}
+          liveSymbol={symbol}
+          livePrice={feed.last?.price ?? null}
+          showToast={showToast}
+          setBalance={setBalance}
+        />
       </div>
 
       {/* RIGHT: trade ticket */}
@@ -133,6 +157,26 @@ export function TradeTerminal() {
               <Wallet className="h-3.5 w-3.5" />
               {loading ? "—" : money(balance)}
             </span>
+          </div>
+
+          {/* Contract type */}
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setContract("rise_fall")}
+              className={`btn py-2 text-sm ${
+                contract === "rise_fall" ? "btn-brand" : "btn-ghost"
+              }`}
+            >
+              Rise / Fall
+            </button>
+            <button
+              onClick={() => setContract("mult")}
+              className={`btn py-2 text-sm ${
+                contract === "mult" ? "btn-brand" : "btn-ghost"
+              }`}
+            >
+              Multipliers
+            </button>
           </div>
 
           {/* Stake */}
@@ -157,65 +201,111 @@ export function TradeTerminal() {
             ))}
           </div>
 
-          {/* Duration */}
-          <label className="mb-1 mt-4 block text-xs font-medium text-muted">
-            <Timer className="mr-1 inline h-3.5 w-3.5" />
-            Duration
-          </label>
-          <div className="grid grid-cols-5 gap-2">
-            {DURATIONS.map((d) => (
-              <button
-                key={d.seconds}
-                onClick={() => setDuration(d.seconds)}
-                className={`btn py-1.5 text-xs ${
-                  duration === d.seconds ? "btn-brand" : "btn-ghost"
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
+          {contract === "rise_fall" ? (
+            <>
+              {/* Duration */}
+              <label className="mb-1 mt-4 block text-xs font-medium text-muted">
+                <Timer className="mr-1 inline h-3.5 w-3.5" />
+                Duration
+              </label>
+              <div className="grid grid-cols-5 gap-2">
+                {DURATIONS.map((d) => (
+                  <button
+                    key={d.seconds}
+                    onClick={() => setDuration(d.seconds)}
+                    className={`btn py-1.5 text-xs ${
+                      duration === d.seconds ? "btn-brand" : "btn-ghost"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
 
-          {/* Payout preview */}
-          <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-surface2/50 px-3 py-2.5">
-            <span className="flex items-center gap-1.5 text-xs text-muted">
-              <Zap className="h-3.5 w-3.5 text-gold" />
-              Potential payout
-            </span>
-            <span className="tabular font-bold text-brand">
-              {money(cents(payout))}
-            </span>
-          </div>
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-surface2/50 px-3 py-2.5">
+                <span className="flex items-center gap-1.5 text-xs text-muted">
+                  <Zap className="h-3.5 w-3.5 text-gold" />
+                  Potential payout
+                </span>
+                <span className="tabular font-bold text-brand">
+                  {money(cents(payout))}
+                </span>
+              </div>
 
-          {/* Buy buttons */}
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <button
-              onClick={() => place("rise")}
-              disabled={!stakeValid || placing !== null}
-              className="btn flex-col gap-0 py-3 text-white"
-              style={{ background: "linear-gradient(180deg,#00e396,#00b877)" }}
-            >
-              <span className="flex items-center gap-1 font-bold">
-                <ArrowUp className="h-4 w-4" /> RISE
-              </span>
-              <span className="text-[10px] opacity-90">
-                {placing === "rise" ? "placing…" : "price goes up"}
-              </span>
-            </button>
-            <button
-              onClick={() => place("fall")}
-              disabled={!stakeValid || placing !== null}
-              className="btn flex-col gap-0 py-3 text-white"
-              style={{ background: "linear-gradient(180deg,#ff5b6a,#e13b4b)" }}
-            >
-              <span className="flex items-center gap-1 font-bold">
-                <ArrowDown className="h-4 w-4" /> FALL
-              </span>
-              <span className="text-[10px] opacity-90">
-                {placing === "fall" ? "placing…" : "price goes down"}
-              </span>
-            </button>
-          </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <BuyButton
+                  color="up"
+                  label="RISE"
+                  sub={placing === "rise" ? "placing…" : "price goes up"}
+                  icon={<ArrowUp className="h-4 w-4" />}
+                  disabled={!stakeValid || placing !== null}
+                  onClick={() => place("rise")}
+                />
+                <BuyButton
+                  color="down"
+                  label="FALL"
+                  sub={placing === "fall" ? "placing…" : "price goes down"}
+                  icon={<ArrowDown className="h-4 w-4" />}
+                  disabled={!stakeValid || placing !== null}
+                  onClick={() => place("fall")}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Multiplier */}
+              <label className="mb-1 mt-4 block text-xs font-medium text-muted">
+                <TrendingUp className="mr-1 inline h-3.5 w-3.5" />
+                Multiplier
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {MULTIPLIERS.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMultiplier(m)}
+                    className={`btn py-1.5 text-xs ${
+                      multiplier === m ? "btn-brand" : "btn-ghost"
+                    }`}
+                  >
+                    x{m}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 rounded-xl border border-border bg-surface2/50 px-3 py-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted">Your P&L moves</span>
+                  <span className="font-bold text-brand">{multiplier}× the market</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-muted">Stop out if market moves</span>
+                  <span className="font-bold text-down">{stopOutPct}% against you</span>
+                </div>
+                <div className="mt-1 text-[11px] text-muted">
+                  You can never lose more than your {money(stakeCents)} stake. Close anytime.
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <BuyButton
+                  color="up"
+                  label="UP"
+                  sub={placing === "up" ? "placing…" : "price goes up"}
+                  icon={<ArrowUp className="h-4 w-4" />}
+                  disabled={!stakeValid || placing !== null}
+                  onClick={() => place("up")}
+                />
+                <BuyButton
+                  color="down"
+                  label="DOWN"
+                  sub={placing === "down" ? "placing…" : "price goes down"}
+                  icon={<ArrowDown className="h-4 w-4" />}
+                  disabled={!stakeValid || placing !== null}
+                  onClick={() => place("down")}
+                />
+              </div>
+            </>
+          )}
 
           {!stakeValid && stakeNum > 0 && (
             <p className="mt-2 text-center text-xs text-down">
@@ -235,11 +325,23 @@ export function TradeTerminal() {
 
         <div className="card p-4 text-xs leading-relaxed text-muted">
           <p className="mb-1 font-semibold text-white">How it works</p>
-          Pick a market, a stake and a time. Choose <span className="text-up">Rise</span> if
-          you think the price will be higher when the timer ends, or{" "}
-          <span className="text-down">Fall</span> if lower. Win and your stake returns{" "}
-          <span className="text-brand">{PAYOUT_MULTIPLIER}×</span>. Outcomes settle on the
-          real Deriv price feed.
+          {contract === "rise_fall" ? (
+            <>
+              Pick a market, a stake and a time. Choose{" "}
+              <span className="text-up">Rise</span> if you think the price will be
+              higher when the timer ends, or <span className="text-down">Fall</span>{" "}
+              if lower. Win and your stake returns{" "}
+              <span className="text-brand">{PAYOUT_MULTIPLIER}×</span>.
+            </>
+          ) : (
+            <>
+              Multipliers amplify your P&L by the multiplier you pick. Go{" "}
+              <span className="text-up">Up</span> or <span className="text-down">Down</span>,
+              watch your live profit, and <span className="text-white">close</span> whenever
+              you like. Losses can’t exceed your stake.
+            </>
+          )}{" "}
+          Outcomes use the real Deriv price feed.
         </div>
       </div>
 
@@ -255,6 +357,40 @@ export function TradeTerminal() {
         </div>
       )}
     </div>
+  );
+}
+
+function BuyButton({
+  color,
+  label,
+  sub,
+  icon,
+  disabled,
+  onClick,
+}: {
+  color: "up" | "down";
+  label: string;
+  sub: string;
+  icon: React.ReactNode;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const bg =
+    color === "up"
+      ? "linear-gradient(180deg,#00e396,#00b877)"
+      : "linear-gradient(180deg,#ff5b6a,#e13b4b)";
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="btn flex-col gap-0 py-3 text-white"
+      style={{ background: bg }}
+    >
+      <span className="flex items-center gap-1 font-bold">
+        {icon} {label}
+      </span>
+      <span className="text-[10px] opacity-90">{sub}</span>
+    </button>
   );
 }
 
@@ -295,24 +431,33 @@ function OpenPositions({
   onSettled,
   liveSymbol,
   livePrice,
+  showToast,
+  setBalance,
 }: {
   trades: Trade[];
   onSettled: () => void;
   liveSymbol: string;
   livePrice: number | null;
+  showToast: (msg: string, ok: boolean) => void;
+  setBalance: (b: number) => void;
 }) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const settling = useRef<Set<number>>(new Set());
+  const [closing, setClosing] = useState<number | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 500);
     return () => clearInterval(id);
   }, []);
 
-  // Auto-settle expired trades.
+  // Auto-settle expired Rise/Fall trades.
   useEffect(() => {
     const expired = trades.filter(
-      (t) => t.status === "open" && Number(t.expiry_epoch) <= now && !settling.current.has(t.id)
+      (t) =>
+        t.kind === "rise_fall" &&
+        t.status === "open" &&
+        Number(t.expiry_epoch) <= now &&
+        !settling.current.has(t.id)
     );
     if (!expired.length) return;
     (async () => {
@@ -325,13 +470,36 @@ function OpenPositions({
             body: JSON.stringify({ id: t.id }),
           });
         } catch {
-          /* retry next tick */
           settling.current.delete(t.id);
         }
       }
       onSettled();
     })();
   }, [now, trades, onSettled]);
+
+  async function closeMult(id: number) {
+    setClosing(id);
+    try {
+      const res = await fetch("/api/trade/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        showToast(json.error || "Could not close.", false);
+      } else {
+        if (typeof json.balance === "number") setBalance(json.balance);
+        const won = json.trade?.status === "won";
+        showToast(won ? "Position closed in profit" : "Position closed", won);
+        onSettled();
+      }
+    } catch {
+      showToast("Network error closing position.", false);
+    } finally {
+      setClosing(null);
+    }
+  }
 
   if (!trades.length) {
     return (
@@ -348,10 +516,64 @@ function OpenPositions({
       </div>
       <div className="divide-y divide-border">
         {trades.map((t) => {
-          const secs = Math.max(0, Number(t.expiry_epoch) - now);
-          const settling = secs <= 0;
           const m = marketBySymbol(t.symbol);
           const isLive = t.symbol === liveSymbol && livePrice != null;
+
+          if (t.kind === "mult") {
+            const pnl = isLive
+              ? multiplierPnl({
+                  direction: t.direction as "up" | "down",
+                  entry: Number(t.entry_price),
+                  current: livePrice!,
+                  stakeCents: Number(t.stake),
+                  multiplier: Number(t.multiplier),
+                })
+              : null;
+            const win = (pnl ?? 0) >= 0;
+            return (
+              <div key={t.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{m?.short ?? t.symbol}</span>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                        t.direction === "up" ? "bg-up/15 text-up" : "bg-down/15 text-down"
+                      }`}
+                    >
+                      {t.direction === "up" ? "UP" : "DOWN"} · x{t.multiplier}
+                    </span>
+                  </div>
+                  <div className="tabular text-xs text-muted">
+                    {money(Number(t.stake))} · entry {Number(t.entry_price).toFixed(2)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase text-muted">P&L</div>
+                    <div
+                      className={`tabular text-sm font-bold ${
+                        pnl == null ? "text-muted" : win ? "text-up" : "text-down"
+                      }`}
+                    >
+                      {pnl == null ? "—" : money(pnl, { sign: true })}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => closeMult(t.id)}
+                    disabled={closing === t.id}
+                    className="btn btn-ghost px-3 py-1.5 text-xs"
+                  >
+                    {closing === t.id ? "…" : <X className="h-3.5 w-3.5" />}
+                    Close
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // Rise/Fall
+          const secs = Math.max(0, Number(t.expiry_epoch) - now);
+          const isSettling = secs <= 0;
           const winning = isLive
             ? t.direction === "rise"
               ? livePrice! > t.entry_price
@@ -364,9 +586,7 @@ function OpenPositions({
                   <span className="font-semibold">{m?.short ?? t.symbol}</span>
                   <span
                     className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                      t.direction === "rise"
-                        ? "bg-up/15 text-up"
-                        : "bg-down/15 text-down"
+                      t.direction === "rise" ? "bg-up/15 text-up" : "bg-down/15 text-down"
                     }`}
                   >
                     {t.direction === "rise" ? "RISE" : "FALL"}
@@ -378,12 +598,12 @@ function OpenPositions({
                 </div>
               </div>
               <div className="text-right">
-                {settling ? (
+                {isSettling ? (
                   <span className="text-xs font-medium text-gold">settling…</span>
                 ) : (
                   <span className="tabular text-lg font-bold">{secs}s</span>
                 )}
-                {isLive && !settling && (
+                {isLive && !isSettling && (
                   <div
                     className={`text-[10px] font-semibold ${
                       winning ? "text-up" : "text-down"

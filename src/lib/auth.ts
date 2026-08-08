@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
+import { createHash } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
-import { db, ensureSchema } from "./db";
+import { db, dbUrl, ensureSchema } from "./db";
 
 const COOKIE = "abetrade_session";
 const DAY = 60 * 60 * 24;
@@ -14,9 +15,17 @@ export type SessionUser = {
 };
 
 function secret(): Uint8Array {
-  const s = process.env.AUTH_SECRET;
-  if (!s) throw new Error("AUTH_SECRET is not set.");
-  return new TextEncoder().encode(s);
+  // Prefer an explicit AUTH_SECRET. If it's not set, derive a STABLE secret from
+  // the database URL so logins keep working across deploys without extra config.
+  // (Setting AUTH_SECRET is still recommended for production.)
+  const explicit = process.env.AUTH_SECRET;
+  if (explicit) return new TextEncoder().encode(explicit);
+  const url = dbUrl();
+  if (url) {
+    const derived = createHash("sha256").update("abetrade::" + url).digest("hex");
+    return new TextEncoder().encode(derived);
+  }
+  throw new Error("AUTH_SECRET is not set and no database URL is available to derive one.");
 }
 
 export async function hashPassword(pw: string): Promise<string> {

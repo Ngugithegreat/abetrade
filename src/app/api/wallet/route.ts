@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { settleExpiredTrades } from "@/lib/trades";
+import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
 
 export const runtime = "nodejs";
@@ -14,9 +14,12 @@ export async function GET() {
   }
   await ensureSchema();
 
-  // Opportunistically settle anything that has expired.
+  // Opportunistically settle expired Rise/Fall trades and stopped-out multipliers.
   try {
-    await settleExpiredTrades(session.id);
+    await Promise.all([
+      settleExpiredTrades(session.id),
+      settleStopOuts(session.id),
+    ]);
   } catch {
     /* non-fatal */
   }
