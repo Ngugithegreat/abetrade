@@ -13,11 +13,14 @@ import {
   Hash,
 } from "lucide-react";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import { useApp, Trade } from "./app-context";
 import { useDerivFeed, useDerivMarkets } from "@/lib/useDerivFeed";
 import { PriceChart } from "./PriceChart";
 import { Sparkline } from "./Sparkline";
 import { DigitHeatmap } from "./DigitHeatmap";
+import { BotPanel } from "./BotPanel";
+import { AiScanner, Signal } from "./AiScanner";
 import {
   MARKETS,
   DURATIONS,
@@ -49,6 +52,8 @@ export function TradeTerminal() {
   const [subtype, setSubtype] = useState<DigitSubtype>("over_under");
   const [barrier, setBarrier] = useState(5);
   const [digitTicks, setDigitTicks] = useState(DEFAULT_DIGIT_TICKS);
+  const [mode, setMode] = useState<"manual" | "auto">("manual");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [placing, setPlacing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -127,8 +132,25 @@ export function TradeTerminal() {
     }
   }
 
+  function applySignal(s: Signal) {
+    setSymbol(s.symbol);
+    if (s.contract === "digit") {
+      setContract("digit");
+      if (s.subtype) setSubtype(s.subtype);
+      if (typeof s.barrier === "number") setBarrier(s.barrier);
+    } else {
+      setContract("rise_fall");
+    }
+    setScannerOpen(false);
+    showToast(`Loaded ${marketBySymbol(s.symbol)?.short ?? s.symbol} · ${s.label}`, true);
+  }
+
+  // AUTO bot supports time-settled contracts only (Rise/Fall + Digits).
+  const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
+
   return (
     <div className="mx-auto max-w-[1480px] px-3 py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+      <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
         <StatChip label="Open positions" value={String(openTrades.length)} />
@@ -271,13 +293,39 @@ export function TradeTerminal() {
 
         {/* Ticket + positions */}
         <div className="flex min-h-0 flex-col gap-3">
-          <div className="card p-3.5">
-            <div className="mb-3 grid grid-cols-3 gap-1.5">
-              {([
-                ["rise_fall", "Rise/Fall"],
-                ["digit", "Digits"],
-                ["mult", "Multipliers"],
-              ] as [Contract, string][]).map(([c, label]) => (
+          <div className="card min-h-0 flex-1 overflow-y-auto p-3.5">
+            {/* Manual / Auto + AI */}
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex flex-1 rounded-xl bg-white/[0.03] p-1">
+                {(["manual", "auto"] as const).map((mo) => (
+                  <button
+                    key={mo}
+                    onClick={() => {
+                      setMode(mo);
+                      if (mo === "auto" && contract === "mult") setContract("digit");
+                    }}
+                    className={`flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition ${
+                      mode === mo ? "bg-brand text-white shadow-glow" : "text-muted hover:text-white"
+                    }`}
+                  >
+                    {mo}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setScannerOpen(true)}
+                className="btn px-3 py-2 text-xs font-semibold text-white"
+                style={{ background: "linear-gradient(180deg,#8b6dff,#6a47f5)" }}
+              >
+                <Sparkles className="h-3.5 w-3.5" /> AI
+              </button>
+            </div>
+
+            <div className={`mb-3 grid gap-1.5 ${mode === "auto" ? "grid-cols-2" : "grid-cols-3"}`}>
+              {(mode === "auto"
+                ? ([["rise_fall", "Rise/Fall"], ["digit", "Digits"]] as [Contract, string][])
+                : ([["rise_fall", "Rise/Fall"], ["digit", "Digits"], ["mult", "Multipliers"]] as [Contract, string][])
+              ).map(([c, label]) => (
                 <button
                   key={c}
                   onClick={() => setContract(c)}
@@ -330,6 +378,7 @@ export function TradeTerminal() {
 
             {contract === "rise_fall" && (
               <RiseFallControls
+                auto={mode === "auto"}
                 duration={duration}
                 setDuration={setDuration}
                 stakeCents={stakeCents}
@@ -338,7 +387,7 @@ export function TradeTerminal() {
                 onPlace={place}
               />
             )}
-            {contract === "mult" && (
+            {contract === "mult" && mode === "manual" && (
               <MultControls
                 multiplier={multiplier}
                 setMultiplier={setMultiplier}
@@ -350,6 +399,7 @@ export function TradeTerminal() {
             )}
             {contract === "digit" && (
               <DigitControls
+                auto={mode === "auto"}
                 subtype={subtype}
                 setSubtype={setSubtype}
                 barrier={barrier}
@@ -360,6 +410,22 @@ export function TradeTerminal() {
                 placing={placing}
                 stakeValid={stakeValid}
                 onPlace={place}
+              />
+            )}
+
+            {mode === "auto" && (
+              <BotPanel
+                symbol={symbol}
+                contract={botContract}
+                subtype={subtype}
+                barrier={barrier}
+                ticks={digitTicks}
+                duration={duration}
+                baseStakeCents={stakeCents}
+                stakeValid={stakeValid}
+                setBalance={setBalance}
+                refresh={refresh}
+                showToast={showToast}
               />
             )}
 
@@ -381,7 +447,7 @@ export function TradeTerminal() {
             )}
           </div>
 
-          <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="card flex h-40 shrink-0 flex-col overflow-hidden">
             <div className="border-b border-border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider text-muted">
               Open positions ({openTrades.length})
             </div>
@@ -415,6 +481,7 @@ export function TradeTerminal() {
 /* ---------------- Contract controls ---------------- */
 
 function RiseFallControls({
+  auto,
   duration,
   setDuration,
   stakeCents,
@@ -439,11 +506,15 @@ function RiseFallControls({
           </button>
         ))}
       </div>
+      {auto ? null : (
+      <>
       <PayoutRow label="Potential payout" value={money(cents(payout))} />
       <div className="mt-2.5 grid grid-cols-2 gap-2.5">
         <BuyButton color="up" label="RISE" sub={placing === "rise" ? "placing…" : "higher"} icon={<ArrowUp className="h-4 w-4" />} disabled={!stakeValid || placing} onClick={() => onPlace("rise")} />
         <BuyButton color="down" label="FALL" sub={placing === "fall" ? "placing…" : "lower"} icon={<ArrowDown className="h-4 w-4" />} disabled={!stakeValid || placing} onClick={() => onPlace("fall")} />
       </div>
+      </>
+      )}
     </>
   );
 }
@@ -498,6 +569,7 @@ const DIGIT_SUBTYPES: [DigitSubtype, string][] = [
 ];
 
 function DigitControls({
+  auto,
   subtype,
   setSubtype,
   barrier,
@@ -569,6 +641,7 @@ function DigitControls({
         ))}
       </div>
 
+      {!auto && (
       <div className="mt-2.5 grid grid-cols-2 gap-2.5">
         {subtype === "even_odd" && (
           <>
@@ -589,6 +662,7 @@ function DigitControls({
           </>
         )}
       </div>
+      )}
     </>
   );
 }

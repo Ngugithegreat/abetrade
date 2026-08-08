@@ -166,7 +166,7 @@ export type MarketTick = {
   open: number | null; // first price seen this session, for % change
 };
 
-const WATCH_POINTS = 32;
+const WATCH_POINTS = 60;
 const WATCH_POLL_MS = 1500;
 
 /**
