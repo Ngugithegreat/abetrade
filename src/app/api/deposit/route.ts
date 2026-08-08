@@ -69,7 +69,7 @@ export async function POST(req: Request) {
       });
 
       const rows = (await sql`
-        INSERT INTO transactions
+        INSERT INTO abetrade_transactions
           (user_id, type, amount, status, method, reference, provider_ref, note)
         VALUES
           (${session.id}, 'deposit', ${amount}, 'pending', 'mpesa', ${phone},
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
 
   // ---- Manual deposit (admin approval) ----
   const rows = (await sql`
-    INSERT INTO transactions (user_id, type, amount, status, method, reference, note)
+    INSERT INTO abetrade_transactions (user_id, type, amount, status, method, reference, note)
     VALUES (${session.id}, 'deposit', ${amount}, 'pending', ${method}, ${reference}, 'Deposit request')
     RETURNING *
   `) as any[];

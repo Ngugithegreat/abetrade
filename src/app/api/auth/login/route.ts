@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     await ensureSchema();
     const sql = db();
     const rows = (await sql`
-      SELECT id, email, name, role, password_hash FROM users WHERE email = ${cleanEmail} LIMIT 1
+      SELECT id, email, name, role, password_hash FROM abetrade_users WHERE email = ${cleanEmail} LIMIT 1
     `) as any[];
 
     if (!rows.length) {

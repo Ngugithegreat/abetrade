@@ -16,16 +16,16 @@ export async function GET() {
   const [pending, users, stats] = await Promise.all([
     sql`
       SELECT t.*, u.email, u.name AS user_name
-      FROM transactions t JOIN users u ON u.id = t.user_id
+      FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
       WHERE t.status = 'pending'
       ORDER BY t.created_at ASC
     ` as Promise<any[]>,
-    sql`SELECT id, name, email, role, balance, created_at FROM users ORDER BY created_at DESC LIMIT 100` as Promise<any[]>,
+    sql`SELECT id, name, email, role, balance, created_at FROM abetrade_users ORDER BY created_at DESC LIMIT 100` as Promise<any[]>,
     sql`
       SELECT
-        (SELECT COUNT(*) FROM users) AS user_count,
-        (SELECT COALESCE(SUM(balance),0) FROM users) AS total_balance,
-        (SELECT COUNT(*) FROM trades) AS trade_count
+        (SELECT COUNT(*) FROM abetrade_users) AS user_count,
+        (SELECT COALESCE(SUM(balance),0) FROM abetrade_users) AS total_balance,
+        (SELECT COUNT(*) FROM abetrade_trades) AS trade_count
     ` as Promise<any[]>,
   ]);
 

@@ -45,22 +45,22 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
   const sql = db();
 
   const updated = (await sql`
-    UPDATE trades
+    UPDATE abetrade_trades
     SET status = ${status}, exit_price = ${tick.price}, settled_at = now()
     WHERE id = ${trade.id} AND status = 'open'
     RETURNING *
   `) as TradeRow[];
 
   if (!updated.length) {
-    const latest = (await sql`SELECT * FROM trades WHERE id = ${trade.id}`) as TradeRow[];
+    const latest = (await sql`SELECT * FROM abetrade_trades WHERE id = ${trade.id}`) as TradeRow[];
     return latest[0] ?? trade;
   }
 
   if (won) {
     const payout = Number(trade.payout);
-    await sql`UPDATE users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
+    await sql`UPDATE abetrade_users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
     await sql`
-      INSERT INTO transactions (user_id, type, amount, status, method, note)
+      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
       VALUES (${trade.user_id}, 'trade_payout', ${payout}, 'completed', 'trade', ${
         "Won " + trade.symbol + " " + trade.direction
       })
@@ -75,7 +75,7 @@ export async function settleExpiredTrades(userId: number): Promise<void> {
   const sql = db();
   const nowSec = Math.floor(Date.now() / 1000);
   const open = (await sql`
-    SELECT * FROM trades
+    SELECT * FROM abetrade_trades
     WHERE user_id = ${userId} AND status = 'open' AND kind = 'rise_fall'
       AND expiry_epoch <= ${nowSec}
     ORDER BY id ASC
@@ -116,21 +116,21 @@ export async function closeMultiplier(
 
   const sql = db();
   const updated = (await sql`
-    UPDATE trades
+    UPDATE abetrade_trades
     SET status = ${status}, exit_price = ${px.price}, payout = ${payout}, settled_at = now()
     WHERE id = ${trade.id} AND status = 'open'
     RETURNING *
   `) as TradeRow[];
 
   if (!updated.length) {
-    const latest = (await sql`SELECT * FROM trades WHERE id = ${trade.id}`) as TradeRow[];
+    const latest = (await sql`SELECT * FROM abetrade_trades WHERE id = ${trade.id}`) as TradeRow[];
     return latest[0] ?? trade;
   }
 
   if (payout > 0) {
-    await sql`UPDATE users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
+    await sql`UPDATE abetrade_users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
     await sql`
-      INSERT INTO transactions (user_id, type, amount, status, method, note)
+      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
       VALUES (${trade.user_id}, 'trade_payout', ${payout}, 'completed', 'trade', ${
         "Closed " + trade.symbol + " " + trade.direction + " x" + trade.multiplier
       })
@@ -148,7 +148,7 @@ export async function closeMultiplier(
 export async function settleStopOuts(userId: number): Promise<void> {
   const sql = db();
   const open = (await sql`
-    SELECT * FROM trades
+    SELECT * FROM abetrade_trades
     WHERE user_id = ${userId} AND status = 'open' AND kind = 'mult'
     ORDER BY id ASC
     LIMIT 25

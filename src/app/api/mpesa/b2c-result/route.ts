@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const sql = db();
 
   const found = (await sql`
-    SELECT * FROM transactions
+    SELECT * FROM abetrade_transactions
     WHERE (provider_ref = ${conversationId ?? ""} OR provider_ref = ${originatorId ?? ""})
       AND type = 'withdrawal' AND status = 'pending'
     LIMIT 1
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 
   if (success) {
     await sql`
-      UPDATE transactions
+      UPDATE abetrade_transactions
       SET status = 'completed', receipt = ${receipt}, note = ${
         "Paid to M-Pesa" + (receipt ? " · " + receipt : "")
       }
@@ -67,13 +67,13 @@ export async function POST(req: Request) {
   } else {
     // Refund the reservation (amount is negative -> subtract to add back).
     const claimed = (await sql`
-      UPDATE transactions
+      UPDATE abetrade_transactions
       SET status = 'rejected', note = ${result?.ResultDesc || "B2C failed"}
       WHERE id = ${tx.id} AND status = 'pending'
       RETURNING *
     `) as any[];
     if (claimed.length) {
-      await sql`UPDATE users SET balance = balance - ${Number(tx.amount)} WHERE id = ${tx.user_id}`;
+      await sql`UPDATE abetrade_users SET balance = balance - ${Number(tx.amount)} WHERE id = ${tx.user_id}`;
     }
   }
 

@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     await ensureSchema();
     const sql = db();
     await sql`
-      UPDATE transactions
+      UPDATE abetrade_transactions
       SET note = 'B2C queue timeout — needs review'
       WHERE (provider_ref = ${conversationId ?? ""} OR provider_ref = ${originatorId ?? ""})
         AND type = 'withdrawal' AND status = 'pending'

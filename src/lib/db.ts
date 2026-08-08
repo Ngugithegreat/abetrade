@@ -50,7 +50,7 @@ export async function ensureSchema(): Promise<void> {
   if (_migrated) return;
   const sql = getSql();
   await sql`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS abetrade_users (
       id            SERIAL PRIMARY KEY,
       email         TEXT UNIQUE NOT NULL,
       name          TEXT NOT NULL,
@@ -61,9 +61,9 @@ export async function ensureSchema(): Promise<void> {
     )
   `;
   await sql`
-    CREATE TABLE IF NOT EXISTS transactions (
+    CREATE TABLE IF NOT EXISTS abetrade_transactions (
       id          SERIAL PRIMARY KEY,
-      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES abetrade_users(id) ON DELETE CASCADE,
       type        TEXT NOT NULL,           -- deposit | withdrawal | trade_stake | trade_payout | adjustment
       amount      BIGINT NOT NULL,         -- positive = credit to user, negative = debit
       status      TEXT NOT NULL DEFAULT 'completed', -- pending | completed | rejected
@@ -74,9 +74,9 @@ export async function ensureSchema(): Promise<void> {
     )
   `;
   await sql`
-    CREATE TABLE IF NOT EXISTS trades (
+    CREATE TABLE IF NOT EXISTS abetrade_trades (
       id           SERIAL PRIMARY KEY,
-      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES abetrade_users(id) ON DELETE CASCADE,
       symbol       TEXT NOT NULL,          -- R_10, R_25, R_50, R_75, R_100
       direction    TEXT NOT NULL,          -- rise | fall
       stake        BIGINT NOT NULL,        -- cents
@@ -92,17 +92,17 @@ export async function ensureSchema(): Promise<void> {
   `;
   // Provider correlation columns for automated M-Pesa (added idempotently so
   // existing databases upgrade cleanly).
-  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS provider_ref TEXT`;
-  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt TEXT`;
+  await sql`ALTER TABLE abetrade_transactions ADD COLUMN IF NOT EXISTS provider_ref TEXT`;
+  await sql`ALTER TABLE abetrade_transactions ADD COLUMN IF NOT EXISTS receipt TEXT`;
 
   // Multipliers contract support on trades.
-  await sql`ALTER TABLE trades ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'rise_fall'`;
-  await sql`ALTER TABLE trades ADD COLUMN IF NOT EXISTS multiplier INTEGER`;
-  await sql`ALTER TABLE trades ADD COLUMN IF NOT EXISTS stop_out_price DOUBLE PRECISION`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'rise_fall'`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS multiplier INTEGER`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS stop_out_price DOUBLE PRECISION`;
 
-  await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON trades(user_id, created_at DESC)`;
-  await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON transactions(provider_ref)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON abetrade_transactions(user_id, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON abetrade_trades(user_id, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON abetrade_transactions(provider_ref)`;
   _migrated = true;
 }
 

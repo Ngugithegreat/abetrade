@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   await ensureSchema();
   const sql = db();
   const rows = (await sql`
-    SELECT * FROM trades WHERE id = ${id} AND user_id = ${session.id} LIMIT 1
+    SELECT * FROM abetrade_trades WHERE id = ${id} AND user_id = ${session.id} LIMIT 1
   `) as TradeRow[];
 
   if (!rows.length) {
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
   try {
     const settled = await settleTrade(rows[0]);
-    const bal = (await sql`SELECT balance FROM users WHERE id = ${session.id}`) as any[];
+    const bal = (await sql`SELECT balance FROM abetrade_users WHERE id = ${session.id}`) as any[];
     return NextResponse.json({
       ok: true,
       trade: settled,

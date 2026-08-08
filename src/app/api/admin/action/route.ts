@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   // Claim the pending row atomically so it can't be actioned twice.
   const newStatus = action === "approve" ? "completed" : "rejected";
   const claimed = (await sql`
-    UPDATE transactions SET status = ${newStatus}
+    UPDATE abetrade_transactions SET status = ${newStatus}
     WHERE id = ${id} AND status = 'pending'
     RETURNING *
   `) as any[];
@@ -46,10 +46,10 @@ export async function POST(req: Request) {
 
   if (tx.type === "deposit" && action === "approve") {
     // Credit the user now.
-    await sql`UPDATE users SET balance = balance + ${amount} WHERE id = ${tx.user_id}`;
+    await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${tx.user_id}`;
   } else if (tx.type === "withdrawal" && action === "reject") {
     // Refund the reserved funds (amount is negative, so subtract to add back).
-    await sql`UPDATE users SET balance = balance - ${amount} WHERE id = ${tx.user_id}`;
+    await sql`UPDATE abetrade_users SET balance = balance - ${amount} WHERE id = ${tx.user_id}`;
   }
   // deposit+reject: nothing was credited, nothing to undo.
   // withdrawal+approve: funds already reserved; admin pays out off-platform.

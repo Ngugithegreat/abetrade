@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
   // Atomic debit — fails cleanly if the user can't cover the stake.
   const debit = (await sql`
-    UPDATE users SET balance = balance - ${stake}
+    UPDATE abetrade_users SET balance = balance - ${stake}
     WHERE id = ${session.id} AND balance >= ${stake}
     RETURNING balance
   `) as Array<{ balance: string | number }>;
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     const payout = Math.round(stake * PAYOUT_MULTIPLIER);
     const expiry = entry.epoch + duration;
     rows = (await sql`
-      INSERT INTO trades
+      INSERT INTO abetrade_trades
         (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status)
       VALUES
         (${session.id}, 'rise_fall', ${symbol}, ${direction}, ${stake}, ${payout},
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
   } else {
     const so = stopOutPrice(direction as "up" | "down", entry.price, multiplier!);
     rows = (await sql`
-      INSERT INTO trades
+      INSERT INTO abetrade_trades
         (user_id, kind, symbol, direction, stake, payout, multiplier, entry_price,
          entry_epoch, expiry_epoch, stop_out_price, status)
       VALUES
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
   }
 
   await sql`
-    INSERT INTO transactions (user_id, type, amount, status, method, note)
+    INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
     VALUES (${session.id}, 'trade_stake', ${-stake}, 'completed', 'trade', ${
       symbol + " " + direction
     })

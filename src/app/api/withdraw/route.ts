@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 
   // Reserve funds atomically.
   const debit = (await sql`
-    UPDATE users SET balance = balance - ${amount}
+    UPDATE abetrade_users SET balance = balance - ${amount}
     WHERE id = ${session.id} AND balance >= ${amount}
     RETURNING balance
   `) as any[];
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       });
 
       const rows = (await sql`
-        INSERT INTO transactions
+        INSERT INTO abetrade_transactions
           (user_id, type, amount, status, method, reference, provider_ref, note)
         VALUES
           (${session.id}, 'withdrawal', ${-amount}, 'pending', 'mpesa', ${phone},
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
       });
     } catch (e: any) {
       // Payout couldn't be initiated — refund the reservation.
-      await sql`UPDATE users SET balance = balance + ${amount} WHERE id = ${session.id}`;
+      await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${session.id}`;
       return NextResponse.json(
         { error: e?.message || "Could not send the M-Pesa payout. You were not charged." },
         { status: 502 }
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
 
   // ---- Manual withdrawal (admin approval) ----
   const rows = (await sql`
-    INSERT INTO transactions (user_id, type, amount, status, method, reference, note)
+    INSERT INTO abetrade_transactions (user_id, type, amount, status, method, reference, note)
     VALUES (${session.id}, 'withdrawal', ${-amount}, 'pending', ${method}, ${rawRef}, 'Withdrawal request')
     RETURNING *
   `) as any[];

@@ -94,7 +94,7 @@ export async function currentUser(): Promise<{
   await ensureSchema();
   const sql = db();
   const rows = (await sql`
-    SELECT id, email, name, role, balance FROM users WHERE id = ${s.id} LIMIT 1
+    SELECT id, email, name, role, balance FROM abetrade_users WHERE id = ${s.id} LIMIT 1
   `) as Array<{
     id: number;
     email: string;

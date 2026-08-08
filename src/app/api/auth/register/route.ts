@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     await ensureSchema();
     const sql = db();
 
-    const existing = (await sql`SELECT id FROM users WHERE email = ${cleanEmail} LIMIT 1`) as any[];
+    const existing = (await sql`SELECT id FROM abetrade_users WHERE email = ${cleanEmail} LIMIT 1`) as any[];
     if (existing.length) {
       return NextResponse.json(
         { error: "An account with that email already exists." },
@@ -36,14 +36,14 @@ export async function POST(req: Request) {
     const isAdminEmail =
       process.env.ADMIN_EMAIL &&
       cleanEmail === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const countRows = (await sql`SELECT COUNT(*)::int AS n FROM users`) as Array<{ n: number }>;
+    const countRows = (await sql`SELECT COUNT(*)::int AS n FROM abetrade_users`) as Array<{ n: number }>;
     const isFirstUser = (countRows[0]?.n ?? 0) === 0;
     const role = isAdminEmail || isFirstUser ? "admin" : "user";
 
     const hash = await hashPassword(String(password));
 
     const rows = (await sql`
-      INSERT INTO users (name, email, password_hash, role, balance)
+      INSERT INTO abetrade_users (name, email, password_hash, role, balance)
       VALUES (${String(name).trim()}, ${cleanEmail}, ${hash}, ${role}, 0)
       RETURNING id, email, name, role
     `) as any[];

@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   const sql = db();
 
   const found = (await sql`
-    SELECT * FROM transactions
+    SELECT * FROM abetrade_transactions
     WHERE provider_ref = ${checkoutId} AND type = 'deposit' AND status = 'pending'
     LIMIT 1
   `) as any[];
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
   if (!verified || !callbackSuccess) {
     // Failed / cancelled / unverifiable — mark rejected (no credit).
     await sql`
-      UPDATE transactions SET status = 'rejected', note = ${
+      UPDATE abetrade_transactions SET status = 'rejected', note = ${
         cb?.ResultDesc || "STK failed"
       }
       WHERE id = ${tx.id} AND status = 'pending'
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
 
   if (paidKes && paidKes < expectedKes) {
     await sql`
-      UPDATE transactions SET status = 'rejected', note = ${
+      UPDATE abetrade_transactions SET status = 'rejected', note = ${
         `Underpaid: KES ${paidKes} of ${expectedKes}`
       }
       WHERE id = ${tx.id} AND status = 'pending'
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
 
   // Atomically claim the row, then credit exactly once.
   const claimed = (await sql`
-    UPDATE transactions
+    UPDATE abetrade_transactions
     SET status = 'completed', receipt = ${receipt}, note = ${
       "M-Pesa confirmed" + (receipt ? " · " + receipt : "")
     }
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
   `) as any[];
 
   if (claimed.length) {
-    await sql`UPDATE users SET balance = balance + ${Number(tx.amount)} WHERE id = ${tx.user_id}`;
+    await sql`UPDATE abetrade_users SET balance = balance + ${Number(tx.amount)} WHERE id = ${tx.user_id}`;
   }
 
   return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted" });
