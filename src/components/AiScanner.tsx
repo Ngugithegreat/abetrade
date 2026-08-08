@@ -73,6 +73,13 @@ function analyze(symbol: string, points: { price: number }[]): Signal | null {
   return { symbol, confidence, ...best };
 }
 
+/** Ranked live signals across all markets (shared by the scanner UI and the AI bot). */
+export function computeSignals(markets: Record<string, MarketTick>): Signal[] {
+  return MARKETS.map((m) => analyze(m.symbol, markets[m.symbol]?.points ?? []))
+    .filter((s): s is Signal => !!s)
+    .sort((a, b) => b.confidence - a.confidence);
+}
+
 export function AiScanner({
   open,
   onClose,
@@ -93,12 +100,7 @@ export function AiScanner({
     return () => clearTimeout(t);
   }, [open]);
 
-  const signals = useMemo(() => {
-    return MARKETS.map((m) => analyze(m.symbol, markets[m.symbol]?.points ?? []))
-      .filter((s): s is Signal => !!s)
-      .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, 6);
-  }, [markets]);
+  const signals = useMemo(() => computeSignals(markets).slice(0, 6), [markets]);
 
   if (!open) return null;
 

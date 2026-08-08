@@ -260,34 +260,34 @@ export function TradeTerminal() {
               {feed.points.length === 0 ? (
                 <ChartSkeleton connected={feed.connected} />
               ) : (
-                <div className="h-full min-h-[220px]">
+                <div className="h-full min-h-[200px]">
                   <PriceChart
                     points={feed.points}
                     up={rising}
+                    decimals={dp}
                     entryPrice={openTrades.find((t) => t.symbol === symbol)?.entry_price ?? null}
                   />
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Live digit heatmap */}
-          <div className="card p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
-                <Hash className="h-3.5 w-3.5" /> Last digits · last 50 ticks
-              </span>
-              <span className="text-[10px] text-muted">tap a digit to set barrier</span>
-            </div>
-            <DigitHeatmap
-              points={feed.points}
-              decimals={dp}
-              onPick={(d) => {
-                setContract("digit");
-                setBarrier(d);
-              }}
-              selected={contract === "digit" && subtype !== "even_odd" ? barrier : null}
-            />
+            {/* Digit strip — part of the chart, shown while trading digits */}
+            {contract === "digit" && (
+              <div className="shrink-0 border-t border-border bg-white/[0.015] px-3 py-2.5">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    <Hash className="h-3 w-3 text-brand" /> Last digits · live
+                  </span>
+                  <span className="text-[10px] text-muted">tap a digit to set barrier</span>
+                </div>
+                <DigitHeatmap
+                  points={feed.points}
+                  decimals={dp}
+                  onPick={(d) => setBarrier(d)}
+                  selected={subtype !== "even_odd" ? barrier : null}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -423,6 +423,7 @@ export function TradeTerminal() {
                 duration={duration}
                 baseStakeCents={stakeCents}
                 stakeValid={stakeValid}
+                markets={markets}
                 setBalance={setBalance}
                 refresh={refresh}
                 showToast={showToast}
@@ -604,26 +605,17 @@ function DigitControls({
       </div>
 
       {needsDigit && (
-        <>
-          <label className="mb-1 mt-3 block text-xs font-medium text-muted">
+        <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-3 py-2">
+          <span className="text-xs text-muted">
             {subtype === "over_under" ? "Barrier digit" : "Target digit"}
-          </label>
-          <div className="grid grid-cols-10 gap-1">
-            {Array.from({ length: 10 }, (_, d) => (
-              <button
-                key={d}
-                onClick={() => setBarrier(d)}
-                className={`tabular rounded-md py-1.5 text-xs font-bold transition ${
-                  barrier === d
-                    ? "bg-brand text-white"
-                    : "bg-white/[0.03] text-muted hover:text-white"
-                }`}
-              >
-                {d}
-              </button>
-            ))}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="tabular flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-sm font-bold text-white">
+              {barrier}
+            </span>
+            <span className="text-[10px] text-muted">tap chart digits</span>
           </div>
-        </>
+        </div>
       )}
 
       <label className="mb-1 mt-3 block text-xs font-medium text-muted">
