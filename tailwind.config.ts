@@ -9,40 +9,59 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#0a0e17",
-        surface: "#111826",
-        surface2: "#182233",
-        border: "#22304a",
-        muted: "#8b9bb4",
+        // "Iris" — obsidian + electric violet-indigo.
+        bg: "#0A0B10",
+        surface: "#12131B",
+        surface2: "#1A1C27",
+        border: "#262A38",
+        muted: "#8A90A6",
         brand: {
-          DEFAULT: "#00d1b2",
-          dark: "#00a892",
+          DEFAULT: "#7C5CFF",
+          dark: "#6A47F5",
+          light: "#9E86FF",
         },
-        up: "#00e396",
-        down: "#ff5b6a",
-        gold: "#f5b301",
+        // Market direction — never used for branding.
+        up: "#00E39A",
+        down: "#FF4D6D",
+        gold: "#FFB020",
       },
       fontFamily: {
-        sans: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+        sans: [
+          "var(--font-sans)",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "sans-serif",
+        ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 40px -10px rgba(0, 209, 178, 0.45)",
-        card: "0 8px 30px -12px rgba(0,0,0,0.6)",
+        glow: "0 0 60px -12px rgba(124, 92, 255, 0.55)",
+        card: "0 12px 40px -16px rgba(0,0,0,0.7)",
+        lift: "0 20px 50px -20px rgba(124, 92, 255, 0.35)",
       },
       keyframes: {
         "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "0%": { opacity: "0", transform: "translateY(14px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         pulseSoft: {
           "0%,100%": { opacity: "1" },
           "50%": { opacity: "0.4" },
         },
+        shimmer: {
+          "0%": { backgroundPosition: "200% 0" },
+          "100%": { backgroundPosition: "-200% 0" },
+        },
       },
       animation: {
-        "fade-up": "fade-up 0.6s ease-out both",
+        "fade-up": "fade-up 0.7s cubic-bezier(0.16,1,0.3,1) both",
         pulseSoft: "pulseSoft 1.5s ease-in-out infinite",
+        shimmer: "shimmer 6s linear infinite",
       },
     },
   },

@@ -40,9 +40,7 @@ export default function Landing() {
           <h1 className="mt-4 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
             Trade the markets.
             <br />
-            <span className="bg-gradient-to-r from-brand to-emerald-300 bg-clip-text text-transparent">
-              Simple. Fast. Live.
-            </span>
+            <span className="text-gradient">Simple. Fast. Live.</span>
           </h1>
           <p className="mt-5 max-w-md text-lg text-muted">
             Predict whether a Volatility Index will rise or fall. Win up to{" "}
@@ -195,7 +193,7 @@ function Feature({
 function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
   return (
     <div className="card p-6 text-center">
-      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-brand font-bold text-[#06231e]">
+      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-brand font-bold text-white shadow-glow">
         {n}
       </div>
       <h3 className="mt-3 font-bold">{title}</h3>

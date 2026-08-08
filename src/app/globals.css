@@ -8,21 +8,23 @@
 
 html,
 body {
-  background: #0a0e17;
-  color: #e6edf6;
+  background: #0a0b10;
+  color: #e8ecf5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Subtle grid + glow backdrop for the whole app */
+/* Layered violet/indigo aurora backdrop for the whole app */
 body {
   background-image:
-    radial-gradient(900px 500px at 80% -10%, rgba(0, 209, 178, 0.10), transparent 60%),
-    radial-gradient(700px 400px at 0% 10%, rgba(88, 101, 242, 0.08), transparent 60%);
+    radial-gradient(1000px 560px at 82% -12%, rgba(124, 92, 255, 0.16), transparent 60%),
+    radial-gradient(760px 460px at -5% 8%, rgba(59, 130, 246, 0.10), transparent 60%),
+    radial-gradient(600px 500px at 50% 120%, rgba(124, 92, 255, 0.08), transparent 60%);
   background-attachment: fixed;
 }
 
 * {
-  border-color: #22304a;
+  border-color: #262a38;
 }
 
 ::-webkit-scrollbar {
@@ -30,17 +32,29 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #22304a;
+  background: #2a2f40;
   border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #343a4e;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+::selection {
+  background: rgba(124, 92, 255, 0.35);
+}
+
+/* Cards: subtle top-lit gradient surface with a hairline highlight */
 .card {
-  background: linear-gradient(180deg, #131b2b 0%, #111826 100%);
-  border: 1px solid #22304a;
-  border-radius: 16px;
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0) 40%),
+    linear-gradient(180deg, #14161f 0%, #101119 100%);
+  border: 1px solid #232735;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px -20px rgba(0, 0, 0, 0.8);
 }
 
 .btn {
@@ -50,45 +64,74 @@ body {
   gap: 8px;
   font-weight: 600;
   border-radius: 12px;
-  transition: all 0.15s ease;
+  transition: transform 0.15s ease, filter 0.15s ease, background 0.15s ease,
+    box-shadow 0.2s ease;
   cursor: pointer;
   white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
 .btn-brand {
-  background: linear-gradient(180deg, #00d1b2, #00a892);
-  color: #06231e;
+  background: linear-gradient(180deg, #8b6dff, #6a47f5);
+  color: #fff;
+  box-shadow: 0 8px 24px -10px rgba(124, 92, 255, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .btn-brand:hover:not(:disabled) {
-  filter: brightness(1.08);
-  box-shadow: 0 0 30px -8px rgba(0, 209, 178, 0.55);
+  filter: brightness(1.07);
+  box-shadow: 0 12px 34px -8px rgba(124, 92, 255, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
+
 .btn-ghost {
-  background: #182233;
-  color: #e6edf6;
-  border: 1px solid #22304a;
+  background: rgba(255, 255, 255, 0.03);
+  color: #e8ecf5;
+  border: 1px solid #262a38;
 }
 .btn-ghost:hover:not(:disabled) {
-  background: #1d2a40;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: #313852;
 }
 
 .input {
   width: 100%;
-  background: #0d1420;
-  border: 1px solid #22304a;
+  background: #0c0e16;
+  border: 1px solid #262a38;
   border-radius: 12px;
   padding: 12px 14px;
-  color: #e6edf6;
+  color: #e8ecf5;
   outline: none;
-  transition: border 0.15s ease;
+  transition: border 0.15s ease, box-shadow 0.15s ease;
+}
+.input::placeholder {
+  color: #5b6274;
 }
 .input:focus {
-  border-color: #00d1b2;
+  border-color: #7c5cff;
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Violet gradient text utility */
+.text-gradient {
+  background: linear-gradient(90deg, #9e86ff, #7c5cff 40%, #5b8def);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Hairline divider with fade */
+.hair {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #262a38 20%, #262a38 80%, transparent);
 }
