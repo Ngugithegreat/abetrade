@@ -14,14 +14,15 @@ import { useApp, Txn } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 
 const METHODS = [
-  { id: "mpesa", label: "M-Pesa", hint: "Phone number e.g. 2547XXXXXXXX" },
+  { id: "mpesa", label: "M-Pesa", hint: "Phone number e.g. 0712345678" },
   { id: "crypto", label: "Crypto (USDT)", hint: "Your USDT (TRC20) wallet address" },
   { id: "bank", label: "Bank", hint: "Account number / name" },
 ];
 
 export function WalletView() {
-  const { balance, data, refresh, setBalance, loading } = useApp();
+  const { balance, data, config, refresh, setBalance, loading } = useApp();
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
+  const rate = config?.usdKesRate ?? 130;
 
   return (
     <div className="space-y-5">
@@ -60,6 +61,9 @@ export function WalletView() {
             <MoneyForm
               kind="deposit"
               max={Infinity}
+              rate={rate}
+              mpesaAutomated={!!config?.mpesaDeposit}
+              refresh={refresh}
               onDone={(newBal) => {
                 if (newBal != null) setBalance(newBal);
                 refresh();
@@ -69,6 +73,9 @@ export function WalletView() {
             <MoneyForm
               kind="withdraw"
               max={balance}
+              rate={rate}
+              mpesaAutomated={!!config?.mpesaWithdraw}
+              refresh={refresh}
               onDone={(newBal) => {
                 if (newBal != null) setBalance(newBal);
                 refresh();
@@ -92,10 +99,16 @@ export function WalletView() {
 function MoneyForm({
   kind,
   max,
+  rate,
+  mpesaAutomated,
+  refresh,
   onDone,
 }: {
   kind: "deposit" | "withdraw";
   max: number;
+  rate: number;
+  mpesaAutomated: boolean;
+  refresh: () => Promise<void>;
   onDone: (newBalance: number | null) => void;
 }) {
   const [amount, setAmount] = useState("");
@@ -106,6 +119,20 @@ function MoneyForm({
 
   const methodDef = METHODS.find((m) => m.id === method)!;
   const amountNum = Number(amount) || 0;
+  const isMpesa = method === "mpesa";
+  const automated = isMpesa && mpesaAutomated;
+  const kes = Math.max(0, Math.round(amountNum * rate));
+
+  // After an automated M-Pesa action, poll the wallet so the status flips from
+  // pending to done (or the balance updates) without a manual refresh.
+  function startPolling() {
+    let n = 0;
+    const id = setInterval(() => {
+      n += 1;
+      refresh();
+      if (n >= 12) clearInterval(id); // ~48s
+    }, 4000);
+  }
 
   async function submit() {
     setMsg(null);
@@ -128,16 +155,15 @@ function MoneyForm({
       if (!res.ok) {
         setMsg({ text: json.error || "Request failed.", ok: false });
       } else {
-        setMsg({
-          text:
-            kind === "deposit"
-              ? "Deposit request received — it will reflect once confirmed by our team."
-              : "Withdrawal requested — funds reserved and sent after approval.",
-          ok: true,
-        });
+        const fallback =
+          kind === "deposit"
+            ? "Deposit request received — it will reflect once confirmed by our team."
+            : "Withdrawal requested — funds reserved and sent after approval.";
+        setMsg({ text: json.message || fallback, ok: true });
         setAmount("");
         setReference("");
         onDone(typeof json.balance === "number" ? json.balance : null);
+        if (json.mpesa) startPolling();
       }
     } catch {
       setMsg({ text: "Network error. Try again.", ok: false });
@@ -178,7 +204,11 @@ function MoneyForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">
-          {kind === "deposit" ? "Sender reference" : "Send to"}
+          {isMpesa
+            ? "M-Pesa phone number"
+            : kind === "deposit"
+            ? "Sender reference"
+            : "Send to"}
         </label>
         <input
           className="input"
@@ -188,6 +218,17 @@ function MoneyForm({
         />
       </div>
 
+      {isMpesa && amountNum > 0 && (
+        <div className="flex items-center justify-between rounded-xl border border-border bg-surface2/50 px-3 py-2 text-xs">
+          <span className="text-muted">
+            {kind === "deposit" ? "You’ll pay" : "You’ll receive"}
+          </span>
+          <span className="tabular font-bold text-brand">
+            KES {kes.toLocaleString("en-US")}
+          </span>
+        </div>
+      )}
+
       <button
         onClick={submit}
         disabled={busy}
@@ -195,6 +236,10 @@ function MoneyForm({
       >
         {busy
           ? "Submitting…"
+          : automated && kind === "deposit"
+          ? "Pay with M-Pesa"
+          : automated
+          ? "Withdraw to M-Pesa"
           : kind === "deposit"
           ? "Request deposit"
           : "Request withdrawal"}
@@ -207,7 +252,11 @@ function MoneyForm({
       )}
 
       <p className="text-center text-[11px] leading-relaxed text-muted">
-        {kind === "deposit"
+        {automated && kind === "deposit"
+          ? "You’ll get an M-Pesa prompt on your phone. Enter your PIN and your balance updates automatically."
+          : automated
+          ? "Money is sent straight to your M-Pesa and usually arrives within a minute."
+          : kind === "deposit"
           ? "Deposits are confirmed by our team, typically within minutes during working hours."
           : "Withdrawals are reviewed and paid to the destination above."}
       </p>

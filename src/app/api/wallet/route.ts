@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { settleExpiredTrades } from "@/lib/trades";
+import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,5 +35,10 @@ export async function GET() {
     transactions: txns,
     openTrades,
     closedTrades,
+    config: {
+      mpesaDeposit: isMpesaConfigured(),
+      mpesaWithdraw: isB2cConfigured(),
+      usdKesRate: usdKesRate(),
+    },
   });
 }

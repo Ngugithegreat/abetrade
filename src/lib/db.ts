@@ -70,8 +70,14 @@ export async function ensureSchema(): Promise<void> {
       settled_at   TIMESTAMPTZ
     )
   `;
+  // Provider correlation columns for automated M-Pesa (added idempotently so
+  // existing databases upgrade cleanly).
+  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS provider_ref TEXT`;
+  await sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS receipt TEXT`;
+
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON transactions(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON trades(user_id, created_at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON transactions(provider_ref)`;
   _migrated = true;
 }
 

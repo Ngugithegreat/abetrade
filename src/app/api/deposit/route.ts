@@ -2,12 +2,21 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { cents } from "@/lib/format";
+import {
+  isMpesaConfigured,
+  normalizePhone,
+  centsToKes,
+  stkPush,
+  callbackBase,
+  callbackToken,
+} from "@/lib/mpesa";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Creates a PENDING deposit. Money is only credited when an admin approves it
-// in /admin (or, later, when an automated PaymentProvider confirms collection).
+// Deposit. If method is 'mpesa' and Daraja is configured, an STK Push prompt is
+// sent to the customer's phone and the transaction stays 'pending' until the
+// M-Pesa callback confirms it. Otherwise it's a manual request an admin approves.
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -32,6 +41,58 @@ export async function POST(req: Request) {
 
   await ensureSchema();
   const sql = db();
+
+  // ---- Automated M-Pesa deposit via STK Push ----
+  if (method === "mpesa" && isMpesaConfigured()) {
+    const phone = normalizePhone(reference);
+    if (!phone) {
+      return NextResponse.json(
+        { error: "Enter a valid M-Pesa phone number (e.g. 0712345678)." },
+        { status: 400 }
+      );
+    }
+    const amountKes = centsToKes(amount);
+
+    try {
+      const cbBase = callbackBase(req.url);
+      const token = callbackToken();
+      const callbackUrl = `${cbBase}/api/mpesa/stk-callback${
+        token ? `?token=${encodeURIComponent(token)}` : ""
+      }`;
+
+      const stk = await stkPush({
+        phone,
+        amountKes,
+        accountRef: `AT${session.id}`,
+        description: "AbeTrade deposit",
+        callbackUrl,
+      });
+
+      const rows = (await sql`
+        INSERT INTO transactions
+          (user_id, type, amount, status, method, reference, provider_ref, note)
+        VALUES
+          (${session.id}, 'deposit', ${amount}, 'pending', 'mpesa', ${phone},
+           ${stk.CheckoutRequestID}, ${"STK push sent · KES " + amountKes})
+        RETURNING *
+      `) as any[];
+
+      return NextResponse.json({
+        ok: true,
+        mpesa: true,
+        amountKes,
+        transaction: rows[0],
+        message: "Check your phone and enter your M-Pesa PIN to complete the deposit.",
+      });
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: e?.message || "Could not start the M-Pesa prompt. Try again." },
+        { status: 502 }
+      );
+    }
+  }
+
+  // ---- Manual deposit (admin approval) ----
   const rows = (await sql`
     INSERT INTO transactions (user_id, type, amount, status, method, reference, note)
     VALUES (${session.id}, 'deposit', ${amount}, 'pending', ${method}, ${reference}, 'Deposit request')

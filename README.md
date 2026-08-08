@@ -32,10 +32,33 @@ The database tables are created automatically on first API call — no manual mi
 Push to GitHub and import the repo in Vercel. Add the same four environment variables in
 **Project → Settings → Environment Variables**, then redeploy.
 
-## Going fully automated (next step)
-Deposits/withdrawals currently settle by admin approval. To automate payouts, implement the
-`PaymentProvider` interface in `src/lib/payments.ts` with your M-Pesa / crypto keys (added as
-Vercel env vars) — the wallet ledger and UI already support it.
+## Automated M-Pesa (Safaricom Daraja)
+Deposits and withdrawals can settle automatically over M-Pesa. If the M-Pesa env vars are set,
+the wallet uses them; otherwise it falls back to manual admin approval (bank/crypto always do).
+
+- **Deposits → STK Push.** The user enters their phone, gets an M-Pesa PIN prompt, and their
+  balance is credited when Safaricom confirms. The callback is **not trusted blindly** — the
+  server re-queries Daraja (`stkpushquery`) and checks the amount before crediting, and every
+  callback URL is gated by a secret token.
+- **Withdrawals → B2C.** Funds are reserved immediately and sent to the user's phone; the result
+  callback marks it paid or refunds on failure.
+
+### Setup
+1. Create an app at [developer.safaricom.co.ke](https://developer.safaricom.co.ke) (sandbox first).
+2. Fill the `MPESA_*` vars in `.env.example` (see that file for what each one is).
+3. Set `MPESA_CALLBACK_BASE_URL` to your deployment's public https URL and
+   `MPESA_CALLBACK_SECRET` to a random string (`openssl rand -hex 16`).
+4. Register these callback URLs with Safaricom / your shortcode:
+   - STK: `{BASE}/api/mpesa/stk-callback?token={SECRET}`
+   - B2C result: `{BASE}/api/mpesa/b2c-result?token={SECRET}`
+   - B2C timeout: `{BASE}/api/mpesa/b2c-timeout?token={SECRET}`
+5. `USD_KES_RATE` converts the USD wallet to the KES M-Pesa moves (users see the KES amount).
+
+Crypto/bank rails can still be automated later via the `PaymentProvider` interface in
+`src/lib/payments.ts`.
+
+> B2C on production requires Safaricom to approve your shortcode and issue an initiator +
+> encrypted security credential.
 
 > ⚠️ Trading real money involves financial and regulatory risk. Make sure you are licensed/authorised
 > to operate this in your jurisdiction before taking real deposits.

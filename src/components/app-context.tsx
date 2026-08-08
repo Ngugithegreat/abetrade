@@ -43,17 +43,25 @@ export type AppUser = {
   balance: number;
 };
 
+export type AppConfig = {
+  mpesaDeposit: boolean;
+  mpesaWithdraw: boolean;
+  usdKesRate: number;
+};
+
 type WalletData = {
   user: AppUser | null;
   transactions: Txn[];
   openTrades: Trade[];
   closedTrades: Trade[];
+  config?: AppConfig;
 };
 
 type Ctx = {
   user: AppUser | null;
   balance: number;
   data: WalletData | null;
+  config: AppConfig | null;
   loading: boolean;
   refresh: () => Promise<void>;
   setBalance: (b: number) => void;
@@ -100,6 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         user: data?.user ?? null,
         balance,
         data,
+        config: data?.config ?? null,
         loading,
         refresh,
         setBalance,

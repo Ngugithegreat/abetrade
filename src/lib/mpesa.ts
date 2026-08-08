@@ -1,0 +1,218 @@
+// Safaricom Daraja (M-Pesa) client — automated deposits (STK Push) and
+// withdrawals (B2C). All secrets come from environment variables; nothing is
+// hard-coded. If the required vars are missing, `isMpesaConfigured()` returns
+// false and the app falls back to manual admin approval.
+
+const SANDBOX_BASE = "https://sandbox.safaricom.co.ke";
+const PROD_BASE = "https://api.safaricom.co.ke";
+
+function base(): string {
+  return (process.env.MPESA_ENV || "sandbox").toLowerCase() === "production"
+    ? PROD_BASE
+    : SANDBOX_BASE;
+}
+
+export function isMpesaConfigured(): boolean {
+  return !!(
+    process.env.MPESA_CONSUMER_KEY &&
+    process.env.MPESA_CONSUMER_SECRET &&
+    process.env.MPESA_SHORTCODE &&
+    process.env.MPESA_PASSKEY
+  );
+}
+
+// B2C (withdrawals) needs extra credentials on top of the deposit ones.
+export function isB2cConfigured(): boolean {
+  return !!(
+    isMpesaConfigured() &&
+    process.env.MPESA_INITIATOR_NAME &&
+    process.env.MPESA_SECURITY_CREDENTIAL &&
+    (process.env.MPESA_B2C_SHORTCODE || process.env.MPESA_SHORTCODE)
+  );
+}
+
+export function usdKesRate(): number {
+  const r = Number(process.env.USD_KES_RATE);
+  return Number.isFinite(r) && r > 0 ? r : 130;
+}
+
+/** USD cents -> whole KES (M-Pesa only moves whole shillings). */
+export function centsToKes(cents: number): number {
+  return Math.max(1, Math.round((cents / 100) * usdKesRate()));
+}
+
+/** Normalise a Kenyan number to 2547XXXXXXXX / 2541XXXXXXXX. Returns null if invalid. */
+export function normalizePhone(input: string): string | null {
+  let p = String(input).trim().replace(/[\s+\-()]/g, "");
+  if (p.startsWith("0")) p = "254" + p.slice(1);
+  else if (p.startsWith("7") || p.startsWith("1")) p = "254" + p;
+  else if (p.startsWith("254")) {
+    /* already good */
+  } else return null;
+  return /^254(7|1)\d{8}$/.test(p) ? p : null;
+}
+
+function timestamp(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    d.getFullYear().toString() +
+    pad(d.getMonth() + 1) +
+    pad(d.getDate()) +
+    pad(d.getHours()) +
+    pad(d.getMinutes()) +
+    pad(d.getSeconds())
+  );
+}
+
+function b64(s: string): string {
+  return Buffer.from(s).toString("base64");
+}
+
+async function accessToken(): Promise<string> {
+  const key = process.env.MPESA_CONSUMER_KEY!;
+  const secret = process.env.MPESA_CONSUMER_SECRET!;
+  const res = await fetch(
+    `${base()}/oauth/v1/generate?grant_type=client_credentials`,
+    {
+      headers: { Authorization: `Basic ${b64(`${key}:${secret}`)}` },
+      cache: "no-store",
+    }
+  );
+  if (!res.ok) throw new Error(`M-Pesa auth failed (${res.status})`);
+  const json = await res.json();
+  if (!json.access_token) throw new Error("M-Pesa auth: no token");
+  return json.access_token as string;
+}
+
+async function daraja<T = any>(path: string, body: unknown): Promise<T> {
+  const token = await accessToken();
+  const res = await fetch(`${base()}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      json?.errorMessage || `M-Pesa request failed (${res.status})`
+    );
+  }
+  return json as T;
+}
+
+export type StkPushResult = {
+  MerchantRequestID: string;
+  CheckoutRequestID: string;
+  ResponseCode: string;
+  ResponseDescription: string;
+};
+
+/** Prompt the customer's phone for an M-Pesa PIN to pay `amountKes`. */
+export async function stkPush(opts: {
+  phone: string;
+  amountKes: number;
+  accountRef: string;
+  description: string;
+  callbackUrl: string;
+}): Promise<StkPushResult> {
+  const shortcode = process.env.MPESA_SHORTCODE!;
+  const passkey = process.env.MPESA_PASSKEY!;
+  const ts = timestamp();
+  const txnType =
+    (process.env.MPESA_STK_TX_TYPE || "CustomerPayBillOnline").trim();
+
+  return daraja<StkPushResult>("/mpesa/stkpush/v1/processrequest", {
+    BusinessShortCode: shortcode,
+    Password: b64(`${shortcode}${passkey}${ts}`),
+    Timestamp: ts,
+    TransactionType: txnType,
+    Amount: opts.amountKes,
+    PartyA: opts.phone,
+    PartyB: shortcode,
+    PhoneNumber: opts.phone,
+    CallBackURL: opts.callbackUrl,
+    AccountReference: opts.accountRef.slice(0, 12),
+    TransactionDesc: opts.description.slice(0, 20),
+  });
+}
+
+export type StkQueryResult = {
+  ResponseCode: string;
+  ResultCode: string;
+  ResultDesc: string;
+};
+
+/**
+ * Authoritative status of an STK request straight from Safaricom. Used to
+ * confirm a deposit before crediting, so a forged callback can't create money.
+ */
+export async function stkQuery(
+  checkoutRequestId: string
+): Promise<StkQueryResult> {
+  const shortcode = process.env.MPESA_SHORTCODE!;
+  const passkey = process.env.MPESA_PASSKEY!;
+  const ts = timestamp();
+  return daraja<StkQueryResult>("/mpesa/stkpushquery/v1/query", {
+    BusinessShortCode: shortcode,
+    Password: b64(`${shortcode}${passkey}${ts}`),
+    Timestamp: ts,
+    CheckoutRequestID: checkoutRequestId,
+  });
+}
+
+export type B2cResult = {
+  ConversationID: string;
+  OriginatorConversationID: string;
+  ResponseCode: string;
+  ResponseDescription: string;
+};
+
+/** Send `amountKes` from the business shortcode to the customer's phone. */
+export async function b2cPayment(opts: {
+  phone: string;
+  amountKes: number;
+  remarks: string;
+  resultUrl: string;
+  timeoutUrl: string;
+}): Promise<B2cResult> {
+  const shortcode =
+    process.env.MPESA_B2C_SHORTCODE || process.env.MPESA_SHORTCODE!;
+  return daraja<B2cResult>("/mpesa/b2c/v1/paymentrequest", {
+    InitiatorName: process.env.MPESA_INITIATOR_NAME!,
+    SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL!,
+    CommandID: process.env.MPESA_B2C_COMMAND || "BusinessPayment",
+    Amount: opts.amountKes,
+    PartyA: shortcode,
+    PartyB: opts.phone,
+    Remarks: opts.remarks.slice(0, 100),
+    QueueTimeOutURL: opts.timeoutUrl,
+    ResultURL: opts.resultUrl,
+    Occasion: "Withdrawal",
+  });
+}
+
+/**
+ * Public base URL for building callback URLs. Prefer an explicit stable domain;
+ * fall back to the Vercel deployment URL, then the request origin.
+ */
+export function callbackBase(reqUrl: string): string {
+  if (process.env.MPESA_CALLBACK_BASE_URL) {
+    return process.env.MPESA_CALLBACK_BASE_URL.replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  try {
+    return new URL(reqUrl).origin;
+  } catch {
+    return "";
+  }
+}
+
+/** Shared secret appended to callback URLs so only Safaricom-triggered (our) URLs are honoured. */
+export function callbackToken(): string {
+  return process.env.MPESA_CALLBACK_SECRET || "";
+}
