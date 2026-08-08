@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0e17;
+  color: #e6edf6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle grid + glow backdrop for the whole app */
+body {
+  background-image:
+    radial-gradient(900px 500px at 80% -10%, rgba(0, 209, 178, 0.10), transparent 60%),
+    radial-gradient(700px 400px at 0% 10%, rgba(88, 101, 242, 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+* {
+  border-color: #22304a;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #22304a;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card {
+  background: linear-gradient(180deg, #131b2b 0%, #111826 100%);
+  border: 1px solid #22304a;
+  border-radius: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-brand {
+  background: linear-gradient(180deg, #00d1b2, #00a892);
+  color: #06231e;
+}
+.btn-brand:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 0 30px -8px rgba(0, 209, 178, 0.55);
+}
+.btn-ghost {
+  background: #182233;
+  color: #e6edf6;
+  border: 1px solid #22304a;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: #1d2a40;
+}
+
+.input {
+  width: 100%;
+  background: #0d1420;
+  border: 1px solid #22304a;
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #e6edf6;
+  outline: none;
+  transition: border 0.15s ease;
+}
+.input:focus {
+  border-color: #00d1b2;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
