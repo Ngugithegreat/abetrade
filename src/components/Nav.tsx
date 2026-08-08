@@ -14,6 +14,7 @@ import { useState } from "react";
 import { useApp } from "./app-context";
 import { money } from "@/lib/format";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 const links = [
   { href: "/trade", label: "Trade", icon: LineChart },
@@ -46,8 +47,8 @@ export function Nav() {
                   href={l.href}
                   className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
                     active
-                      ? "bg-surface2 text-white"
-                      : "text-muted hover:text-white"
+                      ? "bg-surface2 text-fg"
+                      : "text-muted hover:text-fg"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -73,6 +74,7 @@ export function Nav() {
           >
             Deposit
           </Link>
+          <ThemeToggle className="hidden sm:inline-flex" />
           <button
             onClick={logout}
             title="Log out"
@@ -103,7 +105,7 @@ export function Nav() {
                   key={l.href}
                   href={l.href}
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-surface2 hover:text-white"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-surface2 hover:text-fg"
                 >
                   <Icon className="h-4 w-4" />
                   {l.label}

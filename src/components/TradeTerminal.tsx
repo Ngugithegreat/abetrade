@@ -53,6 +53,7 @@ export function TradeTerminal() {
   const [barrier, setBarrier] = useState(5);
   const [digitTicks, setDigitTicks] = useState(DEFAULT_DIGIT_TICKS);
   const [mode, setMode] = useState<"manual" | "auto">("manual");
+  const [posTab, setPosTab] = useState<"open" | "closed">("open");
   const [scannerOpen, setScannerOpen] = useState(false);
   const [placing, setPlacing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
@@ -178,7 +179,7 @@ export function TradeTerminal() {
                   key={m.symbol}
                   onClick={() => setSymbol(m.symbol)}
                   className={`flex w-full items-center justify-between gap-1.5 border-l-2 px-2.5 py-2 text-left transition ${
-                    active ? "border-brand bg-brand/10" : "border-transparent hover:bg-white/[0.03]"
+                    active ? "border-brand bg-brand/10" : "border-transparent hover:bg-surface2"
                   }`}
                 >
                   <div className="min-w-0">
@@ -273,7 +274,7 @@ export function TradeTerminal() {
 
             {/* Digit strip — part of the chart, shown while trading digits */}
             {contract === "digit" && (
-              <div className="shrink-0 border-t border-border bg-white/[0.015] px-3 py-2.5">
+              <div className="shrink-0 border-t border-border bg-surface2/50 px-3 py-2.5">
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
                     <Hash className="h-3 w-3 text-brand" /> Last digits · live
@@ -296,7 +297,7 @@ export function TradeTerminal() {
           <div className="card min-h-0 flex-1 overflow-y-auto p-3.5">
             {/* Manual / Auto + AI */}
             <div className="mb-3 flex items-center gap-2">
-              <div className="flex flex-1 rounded-xl bg-white/[0.03] p-1">
+              <div className="flex flex-1 rounded-xl bg-surface2 p-1">
                 {(["manual", "auto"] as const).map((mo) => (
                   <button
                     key={mo}
@@ -305,7 +306,7 @@ export function TradeTerminal() {
                       if (mo === "auto" && contract === "mult") setContract("digit");
                     }}
                     className={`flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition ${
-                      mode === mo ? "bg-brand text-white shadow-glow" : "text-muted hover:text-white"
+                      mode === mo ? "bg-brand text-white shadow-glow" : "text-muted hover:text-fg"
                     }`}
                   >
                     {mo}
@@ -448,19 +449,33 @@ export function TradeTerminal() {
             )}
           </div>
 
-          <div className="card flex h-40 shrink-0 flex-col overflow-hidden">
-            <div className="border-b border-border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider text-muted">
-              Open positions ({openTrades.length})
+          <div className="card flex h-44 shrink-0 flex-col overflow-hidden">
+            <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
+              {(["open", "closed"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setPosTab(t)}
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold capitalize transition ${
+                    posTab === t ? "bg-surface2 text-fg" : "text-muted hover:text-fg"
+                  }`}
+                >
+                  {t} ({t === "open" ? openTrades.length : closed.length})
+                </button>
+              ))}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <OpenPositions
-                trades={openTrades}
-                onSettled={refresh}
-                liveSymbol={symbol}
-                livePrice={feed.last?.price ?? null}
-                showToast={showToast}
-                setBalance={setBalance}
-              />
+              {posTab === "open" ? (
+                <OpenPositions
+                  trades={openTrades}
+                  onSettled={refresh}
+                  liveSymbol={symbol}
+                  livePrice={feed.last?.price ?? null}
+                  showToast={showToast}
+                  setBalance={setBalance}
+                />
+              ) : (
+                <ClosedPositions trades={closed} />
+              )}
             </div>
           </div>
         </div>
@@ -545,7 +560,7 @@ function MultControls({
           </button>
         ))}
       </div>
-      <div className="mt-3 rounded-xl border border-border bg-white/[0.02] px-3 py-2 text-[11px]">
+      <div className="mt-3 rounded-xl border border-border bg-surface2/60 px-3 py-2 text-[11px]">
         <div className="flex items-center justify-between">
           <span className="text-muted">P&L moves</span>
           <span className="font-bold text-brand">{multiplier}× market</span>
@@ -605,7 +620,7 @@ function DigitControls({
       </div>
 
       {needsDigit && (
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-3 py-2">
+        <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-surface2/60 px-3 py-2">
           <span className="text-xs text-muted">
             {subtype === "over_under" ? "Barrier digit" : "Target digit"}
           </span>
@@ -697,7 +712,7 @@ function ChartSkeleton({ connected }: { connected: boolean }) {
 
 function PayoutRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-white/[0.02] px-3 py-2">
+    <div className="mt-3 flex items-center justify-between rounded-xl border border-border bg-surface2/60 px-3 py-2">
       <span className="flex items-center gap-1.5 text-xs text-muted">
         <Zap className="h-3.5 w-3.5 text-gold" /> {label}
       </span>
@@ -922,6 +937,44 @@ function Row({
         <div className="tabular text-[11px] text-muted">{sub}</div>
       </div>
       <div className="flex items-center gap-2">{children}</div>
+    </div>
+  );
+}
+
+function ClosedPositions({ trades }: { trades: Trade[] }) {
+  if (!trades.length) {
+    return (
+      <div className="flex h-full min-h-[80px] items-center justify-center px-4 py-6 text-center text-xs text-muted">
+        No closed trades yet.
+      </div>
+    );
+  }
+  const label = (t: Trade) => {
+    if (t.kind === "mult") return `${t.direction === "up" ? "UP" : "DOWN"} x${t.multiplier}`;
+    if (t.kind === "digit")
+      return t.subtype === "even_odd" ? t.direction.toUpperCase() : `${t.direction.toUpperCase()} ${t.barrier}`;
+    return t.direction === "rise" ? "RISE" : "FALL";
+  };
+  const profit = (t: Trade) =>
+    t.kind === "mult"
+      ? Number(t.payout) - Number(t.stake)
+      : t.status === "won"
+      ? Number(t.payout) - Number(t.stake)
+      : -Number(t.stake);
+
+  return (
+    <div className="divide-y divide-border">
+      {trades.map((t) => {
+        const won = t.status === "won";
+        const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);
+        return (
+          <Row key={t.id} m={marketBySymbol(t.symbol)?.short ?? t.symbol} tag={label(t)} tagColor={up ? "up" : "down"} sub={`${money(Number(t.stake))} stake`}>
+            <span className={`tabular text-sm font-bold ${won ? "text-up" : "text-down"}`}>
+              {money(profit(t), { sign: true })}
+            </span>
+          </Row>
+        );
+      })}
     </div>
   );
 }

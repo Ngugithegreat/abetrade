@@ -9,18 +9,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // "Iris" — obsidian + electric violet-indigo.
-        bg: "#0A0B10",
-        surface: "#12131B",
-        surface2: "#1A1C27",
-        border: "#262A38",
-        muted: "#8A90A6",
+        // Themeable tokens (channels in globals.css) — adapt to light/dark.
+        bg: "rgb(var(--bg) / <alpha-value>)",
+        surface: "rgb(var(--surface) / <alpha-value>)",
+        surface2: "rgb(var(--surface2) / <alpha-value>)",
+        border: "rgb(var(--border) / <alpha-value>)",
+        muted: "rgb(var(--muted) / <alpha-value>)",
+        fg: "rgb(var(--fg) / <alpha-value>)",
+        // Fixed accents — read well on both themes.
         brand: {
           DEFAULT: "#7C5CFF",
           dark: "#6A47F5",
           light: "#9E86FF",
         },
-        // Market direction — never used for branding.
         up: "#00E39A",
         down: "#FF4D6D",
         gold: "#FFB020",

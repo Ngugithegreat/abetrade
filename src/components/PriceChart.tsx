@@ -11,6 +11,10 @@ import {
   Tooltip,
 } from "recharts";
 import type { Point } from "@/lib/useDerivFeed";
+import { useTheme } from "@/lib/theme";
+
+// How many recent ticks to show — a tighter window zooms in on the price action.
+const VISIBLE = 90;
 
 export function PriceChart({
   points,
@@ -23,14 +27,22 @@ export function PriceChart({
   entryPrice?: number | null;
   decimals?: number;
 }) {
+  const theme = useTheme();
+  const light = theme === "light";
   const color = up ? "#00E39A" : "#FF4D6D";
-  const data = points.map((p) => ({ ...p }));
+  const gridColor = light ? "#e7eaf2" : "#1c2230";
+  const axisColor = light ? "#7a8296" : "#8b93a6";
+  const tipBg = light ? "#ffffff" : "#12131b";
+  const tipBorder = light ? "#e0e4ee" : "#262a38";
 
-  const prices = points.map((p) => p.price);
+  // Zoom to the most recent ticks so movement reads up close.
+  const data = points.slice(-VISIBLE).map((p) => ({ ...p }));
+
+  const prices = data.map((p) => p.price);
   const min = prices.length ? Math.min(...prices) : 0;
   const max = prices.length ? Math.max(...prices) : 1;
-  const pad = (max - min) * 0.18 || max * 0.0008 || 1;
-  const last = points.length ? points[points.length - 1].price : null;
+  const pad = (max - min) * 0.08 || max * 0.0004 || 1;
+  const last = data.length ? data[data.length - 1].price : null;
   const fmt = (v: number) => v.toFixed(decimals);
 
   // Custom price tag pinned to the right axis at the current price.
@@ -58,7 +70,7 @@ export function PriceChart({
     );
   };
 
-  const lastIndex = points.length - 1;
+  const lastIndex = data.length - 1;
   const renderDot = (props: any) => {
     const { cx, cy, index, key } = props;
     if (index !== lastIndex || cx == null || cy == null) {
@@ -70,7 +82,7 @@ export function PriceChart({
           <animate attributeName="r" values="6;12;6" dur="1.6s" repeatCount="indefinite" />
           <animate attributeName="opacity" values="0.25;0;0.25" dur="1.6s" repeatCount="indefinite" />
         </circle>
-        <circle cx={cx} cy={cy} r={3.5} fill={color} stroke="#0a0b10" strokeWidth={1.5} />
+        <circle cx={cx} cy={cy} r={3.5} fill={color} stroke={light ? "#fff" : "#0a0b10"} strokeWidth={1.5} />
       </g>
     );
   };
@@ -86,10 +98,10 @@ export function PriceChart({
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#1a2030" strokeDasharray="2 4" vertical={false} />
+          <CartesianGrid stroke={gridColor} strokeDasharray="2 4" vertical={false} />
           <XAxis
             dataKey="epoch"
-            tick={{ fill: "#5b6274", fontSize: 10 }}
+            tick={{ fill: axisColor, fontSize: 10 }}
             tickFormatter={(v) =>
               new Date(Number(v) * 1000).toLocaleTimeString("en-GB", {
                 minute: "2-digit",
@@ -105,7 +117,7 @@ export function PriceChart({
             domain={[min - pad, max + pad]}
             orientation="right"
             width={62}
-            tick={{ fill: "#8b93a6", fontSize: 11 }}
+            tick={{ fill: axisColor, fontSize: 11 }}
             tickFormatter={fmt}
             tickCount={7}
             axisLine={false}
@@ -113,10 +125,11 @@ export function PriceChart({
           />
           <Tooltip
             contentStyle={{
-              background: "#12131b",
-              border: "1px solid #262a38",
+              background: tipBg,
+              border: `1px solid ${tipBorder}`,
               borderRadius: 10,
               fontSize: 12,
+              color: light ? "#111827" : "#e8ecf5",
             }}
             labelFormatter={(v) =>
               new Date(Number(v) * 1000).toLocaleTimeString("en-GB")

@@ -131,7 +131,7 @@ function Stat({
       ? "text-up"
       : accent === "down"
       ? "text-down"
-      : "text-white";
+      : "text-fg";
   return (
     <div className="card p-4">
       <div className="text-[11px] uppercase tracking-wider text-muted">{label}</div>

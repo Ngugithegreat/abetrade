@@ -189,7 +189,7 @@ export function BotPanel({
         onClick={() => setAiMode((v) => !v)}
         disabled={running}
         className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-xs transition ${
-          aiMode ? "border-brand bg-brand/10" : "border-border bg-white/[0.02]"
+          aiMode ? "border-brand bg-brand/10" : "border-border bg-surface2/60"
         }`}
       >
         <span className="flex items-center gap-1.5 font-semibold">
@@ -237,7 +237,7 @@ export function BotPanel({
       </div>
 
       {(running || stats.runs > 0) && (
-        <div className="grid grid-cols-4 gap-2 rounded-xl border border-border bg-white/[0.02] p-2 text-center">
+        <div className="grid grid-cols-4 gap-2 rounded-xl border border-border bg-surface2/60 p-2 text-center">
           <BotStat label="Runs" value={String(stats.runs)} />
           <BotStat label="Wins" value={String(stats.wins)} accent="up" />
           <BotStat label="Losses" value={String(stats.losses)} accent="down" />
@@ -263,7 +263,7 @@ export function BotPanel({
 
       {/* Run history */}
       {log.length > 0 && (
-        <div className="rounded-xl border border-border bg-white/[0.02]">
+        <div className="rounded-xl border border-border bg-surface2/60">
           <div className="border-b border-border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
             Run history
           </div>
@@ -303,7 +303,7 @@ function BotInput({ label, value, onChange, disabled, icon }: { label: string; v
 }
 
 function BotStat({ label, value, accent }: { label: string; value: string; accent?: "up" | "down" }) {
-  const c = accent === "up" ? "text-up" : accent === "down" ? "text-down" : "text-white";
+  const c = accent === "up" ? "text-up" : accent === "down" ? "text-down" : "text-fg";
   return (
     <div>
       <div className="text-[9px] uppercase tracking-wider text-muted">{label}</div>

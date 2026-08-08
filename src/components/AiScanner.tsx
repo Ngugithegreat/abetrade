@@ -148,7 +148,7 @@ export function AiScanner({
                   return (
                     <div
                       key={s.symbol}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-border bg-white/[0.02] px-3.5 py-2.5"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface2/60 px-3.5 py-2.5"
                     >
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface2 text-xs font-bold text-brand">
@@ -166,7 +166,7 @@ export function AiScanner({
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="w-16 text-right">
-                          <div className="tabular text-sm font-bold text-white">{s.confidence}%</div>
+                          <div className="tabular text-sm font-bold text-fg">{s.confidence}%</div>
                           <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-surface2">
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-brand-light to-brand"

@@ -204,7 +204,7 @@ function Kpi({
   accent?: "up" | "down" | "gold";
 }) {
   const color =
-    accent === "up" ? "text-up" : accent === "down" ? "text-down" : accent === "gold" ? "text-gold" : "text-white";
+    accent === "up" ? "text-up" : accent === "down" ? "text-down" : accent === "gold" ? "text-gold" : "text-fg";
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between">

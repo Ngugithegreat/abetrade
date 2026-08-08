@@ -32,7 +32,7 @@ export function WalletView() {
         <div className="text-xs uppercase tracking-wider text-muted">
           Available balance
         </div>
-        <div className="tabular mt-1 text-4xl font-black text-white">
+        <div className="tabular mt-1 text-4xl font-black text-fg">
           {loading ? "—" : money(balance)}
         </div>
         <div className="mt-1 text-xs text-muted">
@@ -289,7 +289,7 @@ function TxnList({ txns }: { txns: Txn[] }) {
           <div className="text-right">
             <div
               className={`tabular text-sm font-bold ${
-                Number(t.amount) >= 0 ? "text-up" : "text-white"
+                Number(t.amount) >= 0 ? "text-up" : "text-fg"
               }`}
             >
               {money(Number(t.amount), { sign: true })}
