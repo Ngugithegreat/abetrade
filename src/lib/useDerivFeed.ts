@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
+// Deriv app_ids are NUMERIC. If the env var is missing or set to something that
+// isn't all-digits (a common misconfiguration — pasting a token/key), fall back
+// to Deriv's shared test id so the live feed keeps working.
 const RAW_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID;
-const APP_ID = RAW_APP_ID && RAW_APP_ID.trim() ? RAW_APP_ID.trim() : "1089";
+const APP_ID =
+  RAW_APP_ID && /^\d+$/.test(RAW_APP_ID.trim()) ? RAW_APP_ID.trim() : "1089";
 const ENDPOINT = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
 export type Point = { epoch: number; price: number };

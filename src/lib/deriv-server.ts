@@ -5,7 +5,11 @@ import WebSocket from "ws";
 // tick at/after expiry — so the win/lose outcome is authoritative and can't be
 // forged by the browser.
 
-const APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID || "1089";
+// Deriv app_ids are numeric; fall back to the shared test id if misconfigured
+// (a non-numeric value would break entry-price and settlement fetches).
+const RAW_APP_ID = process.env.NEXT_PUBLIC_DERIV_APP_ID;
+const APP_ID =
+  RAW_APP_ID && /^\d+$/.test(RAW_APP_ID.trim()) ? RAW_APP_ID.trim() : "1089";
 const ENDPOINT = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
 export type Tick = { price: number; epoch: number };
