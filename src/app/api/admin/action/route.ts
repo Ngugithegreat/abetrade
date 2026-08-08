@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Approve or reject a pending deposit/withdrawal.
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "admin") {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 

@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session || session.role !== "admin") {
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
   await ensureSchema();

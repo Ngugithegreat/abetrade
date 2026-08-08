@@ -8,7 +8,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <AppProvider>
       <div className="min-h-screen">
         <Nav />
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        {/* Each page owns its own container so the trade dashboard can go
+            full-width and fit the viewport while other pages stay centered. */}
+        <main>{children}</main>
       </div>
     </AppProvider>
   );

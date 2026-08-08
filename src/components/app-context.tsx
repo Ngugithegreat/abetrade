@@ -71,7 +71,8 @@ type Ctx = {
   logout: () => Promise<void>;
 };
 
-const AppCtx = createContext<Ctx | null>(null);
+export const AppCtx = createContext<Ctx | null>(null);
+export type AppCtxValue = Ctx;
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();

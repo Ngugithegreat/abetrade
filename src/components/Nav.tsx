@@ -6,7 +6,6 @@ import {
   LineChart,
   Wallet,
   History,
-  Shield,
   LogOut,
   Menu,
   X,
@@ -24,13 +23,10 @@ const links = [
 
 export function Nav() {
   const pathname = usePathname();
-  const { user, balance, logout, loading } = useApp();
+  const { balance, logout, loading } = useApp();
   const [open, setOpen] = useState(false);
 
-  const allLinks =
-    user?.role === "admin"
-      ? [...links, { href: "/admin", label: "Admin", icon: Shield }]
-      : links;
+  const allLinks = links;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-bg/80 backdrop-blur">

@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { db, dbUrl, ensureSchema } from "./db";
 
 const COOKIE = "abetrade_session";
+const ADMIN_COOKIE = "abetrade_admin";
 const DAY = 60 * 60 * 24;
 
 export type SessionUser = {
@@ -26,6 +27,48 @@ function secret(): Uint8Array {
     return new TextEncoder().encode(derived);
   }
   throw new Error("AUTH_SECRET is not set and no database URL is available to derive one.");
+}
+
+// ---- Operator admin panel (separate from user accounts) ----
+// Access is gated by a single shared password stored in ADMIN_PANEL_PASSWORD.
+
+export function adminPasswordConfigured(): boolean {
+  return !!process.env.ADMIN_PANEL_PASSWORD;
+}
+
+export function checkAdminPassword(pw: string): boolean {
+  const expected = process.env.ADMIN_PANEL_PASSWORD;
+  return !!expected && typeof pw === "string" && pw === expected;
+}
+
+export async function createAdminSession(): Promise<void> {
+  const token = await new SignJWT({ admin: true })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1d")
+    .sign(secret());
+  cookies().set(ADMIN_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: DAY,
+  });
+}
+
+export function clearAdminSession(): void {
+  cookies().set(ADMIN_COOKIE, "", { path: "/", maxAge: 0 });
+}
+
+export async function isAdmin(): Promise<boolean> {
+  const token = cookies().get(ADMIN_COOKIE)?.value;
+  if (!token) return false;
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    return payload.admin === true;
+  } catch {
+    return false;
+  }
 }
 
 export async function hashPassword(pw: string): Promise<string> {
