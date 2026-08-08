@@ -1,31 +1,48 @@
-// Volatility Index markets available on the platform. Symbols are Deriv's
-// synthetic-index tickers, streamed from the public Deriv feed.
+// Volatility Index markets. `decimals` and `tickSeconds` are verified against
+// the live Deriv feed and are used for last-digit (digit contracts) and for
+// mapping tick-duration to expiry time.
 
 export type Market = {
   symbol: string;
   name: string;
   short: string;
-  // rough per-tick volatility, only used for display copy
   volatility: string;
+  decimals: number;
+  tickSeconds: number; // seconds between ticks (1 for the (1s) indices, 2 otherwise)
+  oneSecond: boolean;
 };
 
 export const MARKETS: Market[] = [
-  { symbol: "R_10", name: "Volatility 10 Index", short: "V10", volatility: "Low" },
-  { symbol: "R_25", name: "Volatility 25 Index", short: "V25", volatility: "Moderate" },
-  { symbol: "R_50", name: "Volatility 50 Index", short: "V50", volatility: "Medium" },
-  { symbol: "R_75", name: "Volatility 75 Index", short: "V75", volatility: "High" },
-  { symbol: "R_100", name: "Volatility 100 Index", short: "V100", volatility: "Very High" },
+  // Classic 2-second indices
+  { symbol: "R_10", name: "Volatility 10 Index", short: "V10", volatility: "Low", decimals: 3, tickSeconds: 2, oneSecond: false },
+  { symbol: "R_25", name: "Volatility 25 Index", short: "V25", volatility: "Moderate", decimals: 3, tickSeconds: 2, oneSecond: false },
+  { symbol: "R_50", name: "Volatility 50 Index", short: "V50", volatility: "Medium", decimals: 4, tickSeconds: 2, oneSecond: false },
+  { symbol: "R_75", name: "Volatility 75 Index", short: "V75", volatility: "High", decimals: 4, tickSeconds: 2, oneSecond: false },
+  { symbol: "R_100", name: "Volatility 100 Index", short: "V100", volatility: "Very High", decimals: 2, tickSeconds: 2, oneSecond: false },
+  // 1-second indices (faster ticks — best for digit trading)
+  { symbol: "1HZ10V", name: "Volatility 10 (1s) Index", short: "V10 1s", volatility: "Low", decimals: 2, tickSeconds: 1, oneSecond: true },
+  { symbol: "1HZ25V", name: "Volatility 25 (1s) Index", short: "V25 1s", volatility: "Moderate", decimals: 2, tickSeconds: 1, oneSecond: true },
+  { symbol: "1HZ50V", name: "Volatility 50 (1s) Index", short: "V50 1s", volatility: "Medium", decimals: 2, tickSeconds: 1, oneSecond: true },
+  { symbol: "1HZ75V", name: "Volatility 75 (1s) Index", short: "V75 1s", volatility: "High", decimals: 2, tickSeconds: 1, oneSecond: true },
+  { symbol: "1HZ100V", name: "Volatility 100 (1s) Index", short: "V100 1s", volatility: "Very High", decimals: 2, tickSeconds: 1, oneSecond: true },
 ];
 
 export function marketBySymbol(symbol: string): Market | undefined {
   return MARKETS.find((m) => m.symbol === symbol);
 }
 
-// Payout on a winning Rise/Fall contract = stake * PAYOUT_MULTIPLIER.
-// (~5% platform margin baked in.)
-export const PAYOUT_MULTIPLIER = 1.9;
+export function decimalsFor(symbol: string): number {
+  return marketBySymbol(symbol)?.decimals ?? 2;
+}
 
-// Allowed contract durations, in whole seconds.
+/** The trailing digit of a price at the symbol's precision (0-9). */
+export function lastDigit(price: number, decimals: number): number {
+  const scaled = Math.round(price * Math.pow(10, decimals));
+  return ((scaled % 10) + 10) % 10;
+}
+
+// ---- Rise / Fall ----
+export const PAYOUT_MULTIPLIER = 1.9;
 export const DURATIONS = [
   { seconds: 15, label: "15s" },
   { seconds: 30, label: "30s" },
@@ -34,14 +51,7 @@ export const DURATIONS = [
   { seconds: 300, label: "5m" },
 ];
 
-// Stake limits in cents.
-export const MIN_STAKE = 50; // $0.50
-export const MAX_STAKE = 500000; // $5,000
-
 // ---- Multipliers ----
-// Your P&L moves `multiplier`× as fast as the market. If the market moves
-// (1 / multiplier) against you, the position stops out and you lose your stake —
-// but never more than your stake. You close a position whenever you like.
 export const MULTIPLIERS = [100, 200, 400, 1000];
 export const DEFAULT_MULTIPLIER = 100;
 
@@ -50,15 +60,10 @@ export function stopOutPrice(
   entry: number,
   multiplier: number
 ): number {
-  // Loss reaches 100% of stake when (Δ/entry) = 1/multiplier against you.
   const frac = 1 / multiplier;
   return direction === "up" ? entry * (1 - frac) : entry * (1 + frac);
 }
 
-/**
- * P&L in cents for an open multiplier position at `current` price.
- * Clamped so a loss can never exceed the stake (the stop-out guarantee).
- */
 export function multiplierPnl(opts: {
   direction: "up" | "down";
   entry: number;
@@ -71,3 +76,65 @@ export function multiplierPnl(opts: {
   const pnl = Math.round(opts.stakeCents * opts.multiplier * dirChange);
   return Math.max(-opts.stakeCents, pnl);
 }
+
+// ---- Digits ----
+// Contract on the last digit of the exit tick. Payout scales with the odds so
+// rarer predictions pay more (like Deriv). A small house edge is baked in.
+export const DIGIT_HOUSE_EDGE = 0.05;
+
+// Tick durations for digit contracts.
+export const DIGIT_TICKS = [1, 2, 3, 4, 5];
+export const DEFAULT_DIGIT_TICKS = 1;
+
+export type DigitSubtype = "even_odd" | "over_under" | "matches_differs";
+
+/** Fair multiplier for a given win probability, minus the house edge. */
+export function payoutFromProb(prob: number): number {
+  const m = (1 / prob) * (1 - DIGIT_HOUSE_EDGE);
+  return Math.round(m * 100) / 100;
+}
+
+/**
+ * Win probability for a digit prediction.
+ * over_under: prediction "over"/"under", barrier 0-9.
+ * matches_differs: prediction "matches"/"differs", target 0-9.
+ * even_odd: prediction "even"/"odd".
+ */
+export function digitProb(
+  subtype: DigitSubtype,
+  prediction: string,
+  barrier: number
+): number {
+  if (subtype === "even_odd") return 0.5;
+  if (subtype === "matches_differs")
+    return prediction === "matches" ? 0.1 : 0.9;
+  // over_under
+  if (prediction === "over") return (9 - barrier) / 10; // digit > barrier
+  return barrier / 10; // under: digit < barrier
+}
+
+export function digitPayoutMult(
+  subtype: DigitSubtype,
+  prediction: string,
+  barrier: number
+): number {
+  return payoutFromProb(digitProb(subtype, prediction, barrier));
+}
+
+/** Did a digit prediction win, given the exit last digit? */
+export function digitWins(
+  subtype: DigitSubtype,
+  prediction: string,
+  barrier: number,
+  digit: number
+): boolean {
+  if (subtype === "even_odd")
+    return prediction === "even" ? digit % 2 === 0 : digit % 2 === 1;
+  if (subtype === "matches_differs")
+    return prediction === "matches" ? digit === barrier : digit !== barrier;
+  return prediction === "over" ? digit > barrier : digit < barrier;
+}
+
+// Stake limits (cents)
+export const MIN_STAKE = 50;
+export const MAX_STAKE = 500000;

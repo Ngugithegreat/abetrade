@@ -59,10 +59,15 @@ function TradeRow({ t }: { t: Trade }) {
   const m = marketBySymbol(t.symbol);
   const won = t.status === "won";
   const profit = tradeProfit(t);
-  const up = t.direction === "rise" || t.direction === "up";
+  const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const dirLabel =
     t.kind === "mult"
       ? `${up ? "Up" : "Down"} ×${t.multiplier}`
+      : t.kind === "digit"
+      ? t.subtype === "even_odd"
+        ? cap(t.direction)
+        : `${cap(t.direction)} ${t.barrier}`
       : up
       ? "Rise"
       : "Fall";

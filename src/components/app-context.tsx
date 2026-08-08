@@ -22,9 +22,9 @@ export type Txn = {
 
 export type Trade = {
   id: number;
-  kind: "rise_fall" | "mult";
+  kind: "rise_fall" | "mult" | "digit";
   symbol: string;
-  direction: string; // rise|fall or up|down
+  direction: string; // rise|fall, up|down, even/odd/over/under/matches/differs
   stake: number;
   payout: number;
   multiplier: number | null;
@@ -33,6 +33,10 @@ export type Trade = {
   entry_epoch: number;
   expiry_epoch: number;
   stop_out_price: number | null;
+  subtype: "even_odd" | "over_under" | "matches_differs" | null;
+  prediction: string | null;
+  barrier: number | null;
+  exit_digit: number | null;
   status: "open" | "won" | "lost";
   created_at: string;
   settled_at: string | null;

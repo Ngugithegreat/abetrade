@@ -100,6 +100,14 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS multiplier INTEGER`;
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS stop_out_price DOUBLE PRECISION`;
 
+  // Digit contract support (kind = 'digit').
+  // subtype: even_odd | over_under | matches_differs; prediction: the chosen side;
+  // barrier: barrier/target digit; exit_digit: settled last digit.
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS subtype TEXT`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS prediction TEXT`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS barrier INTEGER`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS exit_digit INTEGER`;
+
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON abetrade_transactions(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON abetrade_trades(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON abetrade_transactions(provider_ref)`;

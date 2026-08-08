@@ -1,13 +1,19 @@
 import { db } from "./db";
 import { getLatestTick, getTickAtOrAfter, Tick } from "./deriv-server";
-import { multiplierPnl } from "./markets";
+import {
+  multiplierPnl,
+  lastDigit,
+  decimalsFor,
+  digitWins,
+  DigitSubtype,
+} from "./markets";
 
 export type TradeRow = {
   id: number;
   user_id: number;
-  kind: "rise_fall" | "mult";
+  kind: "rise_fall" | "mult" | "digit";
   symbol: string;
-  direction: string; // rise|fall for rise_fall, up|down for mult
+  direction: string; // rise|fall, up|down, or even/odd/over/under/matches/differs
   stake: string | number;
   payout: string | number;
   multiplier: number | null;
@@ -16,6 +22,10 @@ export type TradeRow = {
   entry_epoch: string | number;
   expiry_epoch: string | number;
   stop_out_price: number | null;
+  subtype: DigitSubtype | null;
+  prediction: string | null;
+  barrier: number | null;
+  exit_digit: number | null;
   status: "open" | "won" | "lost";
   created_at: string;
   settled_at: string | null;
@@ -27,7 +37,8 @@ export type TradeRow = {
  * the expiry tick isn't available yet.
  */
 export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
-  if (trade.status !== "open" || trade.kind !== "rise_fall") return trade;
+  if (trade.status !== "open") return trade;
+  if (trade.kind !== "rise_fall" && trade.kind !== "digit") return trade;
 
   const nowSec = Math.floor(Date.now() / 1000);
   const expiry = Number(trade.expiry_epoch);
@@ -36,17 +47,29 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
   const tick = await getTickAtOrAfter(trade.symbol, expiry);
   if (!tick) return trade;
 
-  const won =
-    trade.direction === "rise"
-      ? tick.price > trade.entry_price
-      : tick.price < trade.entry_price;
+  let won: boolean;
+  let exitDigit: number | null = null;
+  if (trade.kind === "digit") {
+    exitDigit = lastDigit(tick.price, decimalsFor(trade.symbol));
+    won = digitWins(
+      trade.subtype as DigitSubtype,
+      trade.prediction || trade.direction,
+      Number(trade.barrier ?? 0),
+      exitDigit
+    );
+  } else {
+    won =
+      trade.direction === "rise"
+        ? tick.price > trade.entry_price
+        : tick.price < trade.entry_price;
+  }
 
   const status: "won" | "lost" = won ? "won" : "lost";
   const sql = db();
 
   const updated = (await sql`
     UPDATE abetrade_trades
-    SET status = ${status}, exit_price = ${tick.price}, settled_at = now()
+    SET status = ${status}, exit_price = ${tick.price}, exit_digit = ${exitDigit}, settled_at = now()
     WHERE id = ${trade.id} AND status = 'open'
     RETURNING *
   `) as TradeRow[];
@@ -70,13 +93,13 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
   return updated[0];
 }
 
-/** Settles every expired open Rise/Fall trade for a user. */
+/** Settles every expired open time-based trade (Rise/Fall + Digits) for a user. */
 export async function settleExpiredTrades(userId: number): Promise<void> {
   const sql = db();
   const nowSec = Math.floor(Date.now() / 1000);
   const open = (await sql`
     SELECT * FROM abetrade_trades
-    WHERE user_id = ${userId} AND status = 'open' AND kind = 'rise_fall'
+    WHERE user_id = ${userId} AND status = 'open' AND kind IN ('rise_fall', 'digit')
       AND expiry_epoch <= ${nowSec}
     ORDER BY id ASC
     LIMIT 25

@@ -6,14 +6,20 @@ import {
   MARKETS,
   DURATIONS,
   MULTIPLIERS,
+  DIGIT_TICKS,
   PAYOUT_MULTIPLIER,
   MIN_STAKE,
   MAX_STAKE,
   stopOutPrice,
+  marketBySymbol,
+  digitPayoutMult,
+  DigitSubtype,
 } from "@/lib/markets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const KINDS = ["rise_fall", "mult", "digit"];
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -28,12 +34,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const kind = body.kind === "mult" ? "mult" : "rise_fall";
+  const kind = KINDS.includes(body.kind) ? body.kind : "rise_fall";
   const symbol = String(body.symbol || "");
   const direction = String(body.direction || "");
   const stake = Math.round(Number(body.stake));
 
-  if (!MARKETS.some((m) => m.symbol === symbol)) {
+  const market = marketBySymbol(symbol);
+  if (!market) {
     return NextResponse.json({ error: "Unknown market." }, { status: 400 });
   }
   if (!Number.isFinite(stake) || stake < MIN_STAKE || stake > MAX_STAKE) {
@@ -41,8 +48,12 @@ export async function POST(req: Request) {
   }
 
   // Contract-specific validation.
-  let duration = 0;
+  let duration = 0; // seconds until expiry
   let multiplier: number | null = null;
+  let subtype: DigitSubtype | null = null;
+  let barrier: number | null = null;
+  let payoutMult = PAYOUT_MULTIPLIER;
+
   if (kind === "rise_fall") {
     if (direction !== "rise" && direction !== "fall") {
       return NextResponse.json({ error: "Direction must be rise or fall." }, { status: 400 });
@@ -51,7 +62,7 @@ export async function POST(req: Request) {
     if (!DURATIONS.some((d) => d.seconds === duration)) {
       return NextResponse.json({ error: "Unsupported duration." }, { status: 400 });
     }
-  } else {
+  } else if (kind === "mult") {
     if (direction !== "up" && direction !== "down") {
       return NextResponse.json({ error: "Direction must be up or down." }, { status: 400 });
     }
@@ -59,12 +70,43 @@ export async function POST(req: Request) {
     if (!MULTIPLIERS.includes(multiplier)) {
       return NextResponse.json({ error: "Unsupported multiplier." }, { status: 400 });
     }
+  } else {
+    // digit
+    subtype = body.subtype as DigitSubtype;
+    if (!["even_odd", "over_under", "matches_differs"].includes(subtype)) {
+      return NextResponse.json({ error: "Unknown digit contract." }, { status: 400 });
+    }
+    barrier = Math.round(Number(body.barrier ?? 0));
+    if (subtype === "even_odd") {
+      if (direction !== "even" && direction !== "odd")
+        return NextResponse.json({ error: "Pick even or odd." }, { status: 400 });
+      barrier = 0;
+    } else if (subtype === "over_under") {
+      if (direction !== "over" && direction !== "under")
+        return NextResponse.json({ error: "Pick over or under." }, { status: 400 });
+      if (barrier < 0 || barrier > 9)
+        return NextResponse.json({ error: "Barrier must be 0-9." }, { status: 400 });
+      if (direction === "over" && barrier > 8)
+        return NextResponse.json({ error: "Over barrier must be 0-8." }, { status: 400 });
+      if (direction === "under" && barrier < 1)
+        return NextResponse.json({ error: "Under barrier must be 1-9." }, { status: 400 });
+    } else {
+      if (direction !== "matches" && direction !== "differs")
+        return NextResponse.json({ error: "Pick matches or differs." }, { status: 400 });
+      if (barrier < 0 || barrier > 9)
+        return NextResponse.json({ error: "Digit must be 0-9." }, { status: 400 });
+    }
+    const ticks = Math.round(Number(body.ticks));
+    if (!DIGIT_TICKS.includes(ticks)) {
+      return NextResponse.json({ error: "Unsupported duration." }, { status: 400 });
+    }
+    duration = ticks * market.tickSeconds;
+    payoutMult = digitPayoutMult(subtype, direction, barrier);
   }
 
   await ensureSchema();
   const sql = db();
 
-  // Real entry price from Deriv.
   let entry;
   try {
     entry = await getLatestTick(symbol);
@@ -75,7 +117,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Atomic debit — fails cleanly if the user can't cover the stake.
   const debit = (await sql`
     UPDATE abetrade_users SET balance = balance - ${stake}
     WHERE id = ${session.id} AND balance >= ${stake}
@@ -99,7 +140,7 @@ export async function POST(req: Request) {
          ${entry.price}, ${entry.epoch}, ${expiry}, 'open')
       RETURNING *
     `) as any[];
-  } else {
+  } else if (kind === "mult") {
     const so = stopOutPrice(direction as "up" | "down", entry.price, multiplier!);
     rows = (await sql`
       INSERT INTO abetrade_trades
@@ -108,6 +149,18 @@ export async function POST(req: Request) {
       VALUES
         (${session.id}, 'mult', ${symbol}, ${direction}, ${stake}, 0, ${multiplier},
          ${entry.price}, ${entry.epoch}, 0, ${so}, 'open')
+      RETURNING *
+    `) as any[];
+  } else {
+    const payout = Math.round(stake * payoutMult);
+    const expiry = entry.epoch + duration;
+    rows = (await sql`
+      INSERT INTO abetrade_trades
+        (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch,
+         expiry_epoch, status, subtype, prediction, barrier)
+      VALUES
+        (${session.id}, 'digit', ${symbol}, ${direction}, ${stake}, ${payout},
+         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${subtype}, ${direction}, ${barrier})
       RETURNING *
     `) as any[];
   }
