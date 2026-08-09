@@ -131,19 +131,21 @@ export async function currentUser(): Promise<{
   name: string;
   role: "user" | "admin";
   balance: number;
+  country: string | null;
 } | null> {
   const s = await getSession();
   if (!s) return null;
   await ensureSchema();
   const sql = db();
   const rows = (await sql`
-    SELECT id, email, name, role, balance FROM abetrade_users WHERE id = ${s.id} LIMIT 1
+    SELECT id, email, name, role, balance, country FROM abetrade_users WHERE id = ${s.id} LIMIT 1
   `) as Array<{
     id: number;
     email: string;
     name: string;
     role: "user" | "admin";
     balance: string | number;
+    country: string | null;
   }>;
   if (!rows.length) return null;
   const u = rows[0];

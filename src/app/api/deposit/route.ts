@@ -17,6 +17,12 @@ import {
   paystackAmountSubunit,
 } from "@/lib/paystack";
 import { isCryptoConfigured, createInvoice } from "@/lib/crypto-pay";
+import {
+  isCollectoConfigured,
+  normalizeUgPhone,
+  centsToUgx,
+  requestToPay,
+} from "@/lib/collecto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -143,6 +149,41 @@ export async function POST(req: Request) {
     } catch (e: any) {
       return NextResponse.json(
         { error: e?.message || "Could not start the crypto payment." },
+        { status: 502 }
+      );
+    }
+  }
+
+  // ---------- Uganda mobile money (MTN / Airtel via Collecto) ----------
+  if ((method === "mtn" || method === "airtel") && isCollectoConfigured()) {
+    const phone = normalizeUgPhone(reference);
+    if (!phone) {
+      return NextResponse.json(
+        { error: "Enter a valid Ugandan phone (e.g. 0772123456)." },
+        { status: 400 }
+      );
+    }
+    const amountUgx = centsToUgx(amount);
+    const ref = `atug_${session.id}_${randomUUID().slice(0, 12)}`;
+    try {
+      await requestToPay({ amountUgx, phone, reference: ref, gateway: method });
+      await sql`
+        INSERT INTO abetrade_transactions
+          (user_id, type, amount, status, method, reference, provider_ref, note)
+        VALUES
+          (${session.id}, 'deposit', ${amount}, 'pending', ${method}, ${phone}, ${ref},
+           ${"Prompt sent · UGX " + amountUgx})
+      `;
+      return NextResponse.json({
+        ok: true,
+        poll: true,
+        ref,
+        amountUgx,
+        message: `Check your phone and approve the ${method.toUpperCase()} prompt to complete the deposit.`,
+      });
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: e?.message || "Could not start the mobile-money prompt. Try again." },
         { status: 502 }
       );
     }

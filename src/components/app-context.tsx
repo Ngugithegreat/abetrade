@@ -48,6 +48,7 @@ export type AppUser = {
   email: string;
   role: "user" | "admin";
   balance: number;
+  country: string | null;
 };
 
 export type AppConfig = {
@@ -55,7 +56,9 @@ export type AppConfig = {
   mpesaWithdraw: boolean;
   cardDeposit: boolean;
   cryptoDeposit: boolean;
+  ugMobileDeposit: boolean;
   usdKesRate: number;
+  usdUgxRate: number;
 };
 
 type WalletData = {

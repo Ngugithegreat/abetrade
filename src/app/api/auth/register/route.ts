@@ -7,11 +7,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password } = await req.json();
+    const { name, email, password, country } = await req.json();
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "All fields are required." }, { status: 400 });
     }
+    const cleanCountry = country ? String(country).trim().toUpperCase().slice(0, 8) : null;
     if (String(password).length < 6) {
       return NextResponse.json(
         { error: "Password must be at least 6 characters." },
@@ -43,8 +44,8 @@ export async function POST(req: Request) {
     const hash = await hashPassword(String(password));
 
     const rows = (await sql`
-      INSERT INTO abetrade_users (name, email, password_hash, role, balance)
-      VALUES (${String(name).trim()}, ${cleanEmail}, ${hash}, ${role}, 0)
+      INSERT INTO abetrade_users (name, email, password_hash, role, balance, country)
+      VALUES (${String(name).trim()}, ${cleanEmail}, ${hash}, ${role}, 0, ${cleanCountry})
       RETURNING id, email, name, role
     `) as any[];
 

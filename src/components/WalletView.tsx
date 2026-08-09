@@ -17,20 +17,34 @@ import {
 } from "lucide-react";
 import { useApp, Txn } from "./app-context";
 import { money, shortTime } from "@/lib/format";
+import { railsForCountry } from "@/lib/countries";
 
 type MethodDef = { id: string; label: string; hint: string; icon: any };
 
 const METHOD_DEFS: Record<string, MethodDef> = {
   mpesa: { id: "mpesa", label: "M-Pesa", hint: "Phone e.g. 0712345678", icon: Smartphone },
+  mtn: { id: "mtn", label: "MTN", hint: "Phone e.g. 0772123456", icon: Smartphone },
+  airtel: { id: "airtel", label: "Airtel", hint: "Phone e.g. 0752123456", icon: Smartphone },
   card: { id: "card", label: "Card", hint: "", icon: CreditCard },
   bank: { id: "bank", label: "Bank", hint: "Account number / name", icon: Landmark },
   crypto: { id: "crypto", label: "Crypto", hint: "USDT / BTC & more", icon: Bitcoin },
 };
 
+// Deposit rails come from the user's country. Withdrawals swap card -> bank.
+function depositMethods(country: string | null | undefined): string[] {
+  return railsForCountry(country);
+}
+function withdrawMethods(country: string | null | undefined): string[] {
+  const out: string[] = [];
+  for (const r of railsForCountry(country)) out.push(r === "card" ? "bank" : r);
+  return Array.from(new Set(out));
+}
+
 export function WalletView() {
-  const { balance, data, config, refresh, setBalance, loading } = useApp();
+  const { user, balance, data, config, refresh, setBalance, loading } = useApp();
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const rate = config?.usdKesRate ?? 130;
+  const country = user?.country ?? null;
 
   // Returning from a hosted checkout (?deposit=processing) — confirm & poll.
   const [processing, setProcessing] = useState(false);
@@ -103,6 +117,7 @@ export function WalletView() {
               kind="deposit"
               max={Infinity}
               rate={rate}
+              methodIds={depositMethods(country)}
               mpesaAutomated={!!config?.mpesaDeposit}
               config={config}
               refresh={refresh}
@@ -116,6 +131,7 @@ export function WalletView() {
               kind="withdraw"
               max={balance}
               rate={rate}
+              methodIds={withdrawMethods(country)}
               mpesaAutomated={!!config?.mpesaWithdraw}
               config={config}
               refresh={refresh}
@@ -143,6 +159,7 @@ function MoneyForm({
   kind,
   max,
   rate,
+  methodIds,
   mpesaAutomated,
   config,
   refresh,
@@ -151,25 +168,27 @@ function MoneyForm({
   kind: "deposit" | "withdraw";
   max: number;
   rate: number;
+  methodIds: string[];
   mpesaAutomated: boolean;
   config: import("./app-context").AppConfig | null;
   refresh: () => Promise<void>;
   onDone: (newBalance: number | null) => void;
 }) {
-  const methodIds =
-    kind === "deposit" ? ["mpesa", "card", "bank", "crypto"] : ["mpesa", "crypto", "bank"];
-  const methods = methodIds.map((id) => METHOD_DEFS[id]);
+  const methods = methodIds.map((id) => METHOD_DEFS[id]).filter(Boolean);
 
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState(methods[0].id);
+  const [method, setMethod] = useState(methods[0]?.id ?? "card");
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const methodDef = METHOD_DEFS[method];
+  const methodDef = METHOD_DEFS[method] ?? METHOD_DEFS.card;
   const amountNum = Number(amount) || 0;
   const isMpesa = method === "mpesa";
-  const automated = isMpesa && mpesaAutomated;
+  const isUgMobile = method === "mtn" || method === "airtel";
+  const needsPhone = isMpesa || isUgMobile;
+  const automated =
+    (isMpesa && mpesaAutomated) || (isUgMobile && !!config?.ugMobileDeposit);
   const kes = Math.max(0, Math.round(amountNum * rate));
 
   // Card/bank/crypto deposits go to a hosted checkout (gateway collects details).
@@ -186,6 +205,32 @@ function MoneyForm({
       n += 1;
       refresh();
       if (n >= 12) clearInterval(id); // ~48s
+    }, 4000);
+  }
+
+  // Poll the Collecto status endpoint after an MTN/Airtel prompt.
+  function pollCollecto(ref: string) {
+    let n = 0;
+    const id = setInterval(async () => {
+      n += 1;
+      try {
+        const res = await fetch(`/api/collecto/status?ref=${encodeURIComponent(ref)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (json.status === "completed") {
+          clearInterval(id);
+          if (typeof json.balance === "number") onDone(json.balance);
+          refresh();
+          setMsg({ text: "Deposit received — your balance is updated.", ok: true });
+        } else if (json.status === "failed") {
+          clearInterval(id);
+          setMsg({ text: "The payment was not completed. Please try again.", ok: false });
+        }
+      } catch {
+        /* keep polling */
+      }
+      if (n >= 20) clearInterval(id); // ~80s
     }, 4000);
   }
 
@@ -214,6 +259,12 @@ function MoneyForm({
         setMsg({ text: "Redirecting to secure checkout…", ok: true });
         window.location.href = json.redirectUrl;
         return;
+      } else if (json.poll && json.ref) {
+        // MTN / Airtel prompt sent — poll until confirmed.
+        setMsg({ text: json.message || "Approve the prompt on your phone.", ok: true });
+        setAmount("");
+        setReference("");
+        pollCollecto(json.ref);
       } else {
         const fallback =
           kind === "deposit"
@@ -270,8 +321,8 @@ function MoneyForm({
       {showReference && (
         <div>
           <label className="mb-1 block text-xs font-medium text-muted">
-            {isMpesa
-              ? "M-Pesa phone number"
+            {needsPhone
+              ? `${methodDef.label} phone number`
               : kind === "deposit"
               ? "Sender reference"
               : method === "crypto"
@@ -287,13 +338,15 @@ function MoneyForm({
         </div>
       )}
 
-      {isMpesa && amountNum > 0 && (
+      {needsPhone && amountNum > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-surface2/50 px-3 py-2 text-xs">
           <span className="text-muted">
             {kind === "deposit" ? "You’ll pay" : "You’ll receive"}
           </span>
           <span className="tabular font-bold text-brand">
-            KES {kes.toLocaleString("en-US")}
+            {isMpesa
+              ? `KES ${kes.toLocaleString("en-US")}`
+              : `UGX ${Math.max(500, Math.round(amountNum * (config?.usdUgxRate ?? 3750))).toLocaleString("en-US")}`}
           </span>
         </div>
       )}
@@ -312,9 +365,9 @@ function MoneyForm({
           : isHostedDeposit
           ? "Pay with Card"
           : automated && kind === "deposit"
-          ? "Pay with M-Pesa"
+          ? `Pay with ${methodDef.label}`
           : automated
-          ? "Withdraw to M-Pesa"
+          ? `Withdraw to ${methodDef.label}`
           : kind === "deposit"
           ? "Request deposit"
           : "Request withdrawal"}
@@ -332,9 +385,9 @@ function MoneyForm({
           : isHostedDeposit
           ? "You’ll be taken to a secure checkout to pay by card or bank. Your balance updates automatically once payment is confirmed."
           : automated && kind === "deposit"
-          ? "You’ll get an M-Pesa prompt on your phone. Enter your PIN and your balance updates automatically."
+          ? `You’ll get a ${methodDef.label} prompt on your phone. Approve it and your balance updates automatically.`
           : automated
-          ? "Money is sent straight to your M-Pesa and usually arrives within a minute."
+          ? `Money is sent straight to your ${methodDef.label} and usually arrives within a minute.`
           : kind === "deposit"
           ? "Deposits are confirmed by our team, typically within minutes during working hours."
           : "Withdrawals are reviewed and paid to the destination above."}
