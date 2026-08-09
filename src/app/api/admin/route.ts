@@ -81,5 +81,37 @@ export async function GET() {
       pnl: num(u.pnl),
       trades: num(u.trades),
     })),
+    // Payment setup diagnostics — booleans only, NEVER the secret values.
+    setup: {
+      mpesa: {
+        MPESA_CONSUMER_KEY: !!process.env.MPESA_CONSUMER_KEY,
+        MPESA_CONSUMER_SECRET: !!process.env.MPESA_CONSUMER_SECRET,
+        MPESA_SHORTCODE: !!process.env.MPESA_SHORTCODE,
+        MPESA_PASSKEY: !!process.env.MPESA_PASSKEY,
+        MPESA_ENV: process.env.MPESA_ENV || "sandbox",
+        deposits_ready:
+          !!process.env.MPESA_CONSUMER_KEY &&
+          !!process.env.MPESA_CONSUMER_SECRET &&
+          !!process.env.MPESA_SHORTCODE &&
+          !!process.env.MPESA_PASSKEY,
+        MPESA_INITIATOR_NAME: !!process.env.MPESA_INITIATOR_NAME,
+        MPESA_SECURITY_CREDENTIAL: !!process.env.MPESA_SECURITY_CREDENTIAL,
+      },
+      shared: {
+        PUBLIC_BASE_URL: !!(process.env.PUBLIC_BASE_URL || process.env.MPESA_CALLBACK_BASE_URL),
+        MPESA_CALLBACK_SECRET: !!process.env.MPESA_CALLBACK_SECRET,
+      },
+      card_bank: { PAYSTACK_SECRET_KEY: !!process.env.PAYSTACK_SECRET_KEY },
+      crypto: {
+        NOWPAYMENTS_API_KEY: !!process.env.NOWPAYMENTS_API_KEY,
+        NOWPAYMENTS_IPN_SECRET: !!process.env.NOWPAYMENTS_IPN_SECRET,
+      },
+      uganda: {
+        COLLECTO_USERNAME: !!process.env.COLLECTO_USERNAME,
+        COLLECTO_BASE_URL: !!process.env.COLLECTO_BASE_URL,
+        COLLECTO_RELAY_SECRET: !!process.env.COLLECTO_RELAY_SECRET,
+        COLLECTO_API_KEY: !!process.env.COLLECTO_API_KEY,
+      },
+    },
   });
 }

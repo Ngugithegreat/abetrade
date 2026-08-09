@@ -89,6 +89,9 @@ export function AdminView() {
         <Kpi icon={Activity} label="Trades" value={String(k.tradeCount)} sub={`${winRate}% player win`} />
       </div>
 
+      {/* Payment setup diagnostics */}
+      {data.setup && <SetupCard setup={data.setup} />}
+
       {/* Volume chart */}
       <div className="card p-5">
         <div className="mb-3 text-sm font-bold">Trade volume · last 14 days</div>
@@ -185,6 +188,89 @@ export function AdminView() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SetupCard({ setup }: { setup: any }) {
+  const groups: { title: string; ready?: boolean; items: [string, boolean][] }[] = [
+    {
+      title: "M-Pesa deposits (Kenya)",
+      ready: setup.mpesa.deposits_ready,
+      items: [
+        ["MPESA_CONSUMER_KEY", setup.mpesa.MPESA_CONSUMER_KEY],
+        ["MPESA_CONSUMER_SECRET", setup.mpesa.MPESA_CONSUMER_SECRET],
+        ["MPESA_SHORTCODE", setup.mpesa.MPESA_SHORTCODE],
+        ["MPESA_PASSKEY", setup.mpesa.MPESA_PASSKEY],
+      ],
+    },
+    {
+      title: "M-Pesa withdrawals (B2C)",
+      items: [
+        ["MPESA_INITIATOR_NAME", setup.mpesa.MPESA_INITIATOR_NAME],
+        ["MPESA_SECURITY_CREDENTIAL", setup.mpesa.MPESA_SECURITY_CREDENTIAL],
+      ],
+    },
+    {
+      title: "Shared",
+      items: [
+        ["PUBLIC_BASE_URL", setup.shared.PUBLIC_BASE_URL],
+        ["MPESA_CALLBACK_SECRET", setup.shared.MPESA_CALLBACK_SECRET],
+      ],
+    },
+    { title: "Card & Bank (Paystack)", items: [["PAYSTACK_SECRET_KEY", setup.card_bank.PAYSTACK_SECRET_KEY]] },
+    {
+      title: "Crypto (NOWPayments)",
+      items: [
+        ["NOWPAYMENTS_API_KEY", setup.crypto.NOWPAYMENTS_API_KEY],
+        ["NOWPAYMENTS_IPN_SECRET", setup.crypto.NOWPAYMENTS_IPN_SECRET],
+      ],
+    },
+    {
+      title: "Uganda (Collecto)",
+      items: [
+        ["COLLECTO_USERNAME", setup.uganda.COLLECTO_USERNAME],
+        ["COLLECTO_BASE_URL", setup.uganda.COLLECTO_BASE_URL],
+        ["COLLECTO_RELAY_SECRET / API_KEY", setup.uganda.COLLECTO_RELAY_SECRET || setup.uganda.COLLECTO_API_KEY],
+      ],
+    },
+  ];
+
+  return (
+    <div className="card p-5">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-bold">Payment setup</div>
+        <span
+          className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
+            setup.mpesa.deposits_ready ? "bg-up/15 text-up" : "bg-down/15 text-down"
+          }`}
+        >
+          M-Pesa {setup.mpesa.deposits_ready ? "LIVE" : "OFF"} · {setup.mpesa.MPESA_ENV}
+        </span>
+      </div>
+      <p className="mb-3 text-[11px] leading-relaxed text-muted">
+        Green = the server can see this variable. Added a variable but it’s red? It isn’t in
+        this deployment — make sure it’s set for <b>Production</b> in Vercel, then redeploy.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {groups.map((g) => (
+          <div key={g.title} className="rounded-xl border border-border bg-white/[0.02] p-3">
+            <div className="mb-1.5 text-xs font-semibold">{g.title}</div>
+            <div className="space-y-1">
+              {g.items.map(([name, ok]) => (
+                <div key={name} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="tabular text-muted">{name}</span>
+                  {ok ? (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-up" />
+                  ) : (
+                    <X className="h-3.5 w-3.5 shrink-0 text-down" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

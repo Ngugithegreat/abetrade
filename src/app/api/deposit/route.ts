@@ -54,8 +54,17 @@ export async function POST(req: Request) {
   const base = callbackBase(req.url);
   const usd = amount / 100;
 
-  // ---------- M-Pesa (STK Push) ----------
-  if (method === "mpesa" && isMpesaConfigured()) {
+  // ---------- M-Pesa (STK Push) — always instant, never manual ----------
+  if (method === "mpesa") {
+    if (!isMpesaConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "M-Pesa isn’t available right now. (Admin: set the MPESA_* variables in Vercel and redeploy.)",
+        },
+        { status: 503 }
+      );
+    }
     const phone = normalizePhone(reference);
     if (!phone) {
       return NextResponse.json(
@@ -155,7 +164,16 @@ export async function POST(req: Request) {
   }
 
   // ---------- Uganda mobile money (MTN / Airtel via Collecto) ----------
-  if ((method === "mtn" || method === "airtel") && isCollectoConfigured()) {
+  if (method === "mtn" || method === "airtel") {
+    if (!isCollectoConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Mobile money isn’t available right now. (Admin: set the COLLECTO_* variables in Vercel and redeploy.)",
+        },
+        { status: 503 }
+      );
+    }
     const phone = normalizeUgPhone(reference);
     if (!phone) {
       return NextResponse.json(

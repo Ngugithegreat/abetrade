@@ -364,9 +364,9 @@ function MoneyForm({
           ? "Continue to Bank"
           : isHostedDeposit
           ? "Pay with Card"
-          : automated && kind === "deposit"
+          : needsPhone && kind === "deposit"
           ? `Pay with ${methodDef.label}`
-          : automated
+          : needsPhone
           ? `Withdraw to ${methodDef.label}`
           : kind === "deposit"
           ? "Request deposit"
@@ -384,12 +384,12 @@ function MoneyForm({
           ? "You’ll be taken to a secure page to pay with USDT, BTC and more. Your balance updates automatically once the payment confirms on-chain."
           : isHostedDeposit
           ? "You’ll be taken to a secure checkout to pay by card or bank. Your balance updates automatically once payment is confirmed."
-          : automated && kind === "deposit"
-          ? `You’ll get a ${methodDef.label} prompt on your phone. Approve it and your balance updates automatically.`
-          : automated
+          : needsPhone && kind === "deposit"
+          ? `You’ll get a ${methodDef.label} prompt on your phone. Approve it and your balance is credited instantly.`
+          : needsPhone
           ? `Money is sent straight to your ${methodDef.label} and usually arrives within a minute.`
           : kind === "deposit"
-          ? "Deposits are confirmed by our team, typically within minutes during working hours."
+          ? "Complete the secure checkout to fund your account."
           : "Withdrawals are reviewed and paid to the destination above."}
       </p>
     </div>
