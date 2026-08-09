@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -9,20 +9,49 @@ import {
   XCircle,
   TrendingUp,
   TrendingDown,
+  Smartphone,
+  CreditCard,
+  Landmark,
+  Bitcoin,
+  Loader2,
 } from "lucide-react";
 import { useApp, Txn } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 
-const METHODS = [
-  { id: "mpesa", label: "M-Pesa", hint: "Phone number e.g. 0712345678" },
-  { id: "crypto", label: "Crypto (USDT)", hint: "Your USDT (TRC20) wallet address" },
-  { id: "bank", label: "Bank", hint: "Account number / name" },
-];
+type MethodDef = { id: string; label: string; hint: string; icon: any };
+
+const METHOD_DEFS: Record<string, MethodDef> = {
+  mpesa: { id: "mpesa", label: "M-Pesa", hint: "Phone e.g. 0712345678", icon: Smartphone },
+  card: { id: "card", label: "Card", hint: "", icon: CreditCard },
+  bank: { id: "bank", label: "Bank", hint: "Account number / name", icon: Landmark },
+  crypto: { id: "crypto", label: "Crypto", hint: "USDT / BTC & more", icon: Bitcoin },
+};
 
 export function WalletView() {
   const { balance, data, config, refresh, setBalance, loading } = useApp();
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const rate = config?.usdKesRate ?? 130;
+
+  // Returning from a hosted checkout (?deposit=processing) — confirm & poll.
+  const [processing, setProcessing] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search).get("deposit");
+    if (p === "processing") {
+      setProcessing(true);
+      window.history.replaceState({}, "", "/wallet");
+      let n = 0;
+      const id = setInterval(() => {
+        n += 1;
+        refresh();
+        if (n >= 15) {
+          clearInterval(id);
+          setProcessing(false);
+        }
+      }, 4000);
+      return () => clearInterval(id);
+    }
+  }, [refresh]);
 
   return (
     <div className="space-y-5">
@@ -39,6 +68,18 @@ export function WalletView() {
           Funds are held securely and settle to your withdrawals on request.
         </div>
       </div>
+
+      {processing && (
+        <div className="card flex items-center gap-3 border-brand/40 p-4">
+          <Loader2 className="h-5 w-5 animate-spin text-brand" />
+          <div>
+            <div className="text-sm font-semibold">Confirming your payment…</div>
+            <div className="text-xs text-muted">
+              Your balance updates automatically once the payment is confirmed.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
         {/* Money form */}
@@ -63,6 +104,7 @@ export function WalletView() {
               max={Infinity}
               rate={rate}
               mpesaAutomated={!!config?.mpesaDeposit}
+              config={config}
               refresh={refresh}
               onDone={(newBal) => {
                 if (newBal != null) setBalance(newBal);
@@ -75,6 +117,7 @@ export function WalletView() {
               max={balance}
               rate={rate}
               mpesaAutomated={!!config?.mpesaWithdraw}
+              config={config}
               refresh={refresh}
               onDone={(newBal) => {
                 if (newBal != null) setBalance(newBal);
@@ -101,6 +144,7 @@ function MoneyForm({
   max,
   rate,
   mpesaAutomated,
+  config,
   refresh,
   onDone,
 }: {
@@ -108,20 +152,31 @@ function MoneyForm({
   max: number;
   rate: number;
   mpesaAutomated: boolean;
+  config: import("./app-context").AppConfig | null;
   refresh: () => Promise<void>;
   onDone: (newBalance: number | null) => void;
 }) {
+  const methodIds =
+    kind === "deposit" ? ["mpesa", "card", "bank", "crypto"] : ["mpesa", "crypto", "bank"];
+  const methods = methodIds.map((id) => METHOD_DEFS[id]);
+
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState(METHODS[0].id);
+  const [method, setMethod] = useState(methods[0].id);
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const methodDef = METHODS.find((m) => m.id === method)!;
+  const methodDef = METHOD_DEFS[method];
   const amountNum = Number(amount) || 0;
   const isMpesa = method === "mpesa";
   const automated = isMpesa && mpesaAutomated;
   const kes = Math.max(0, Math.round(amountNum * rate));
+
+  // Card/bank/crypto deposits go to a hosted checkout (gateway collects details).
+  const gatewayReady =
+    (method === "card" || method === "bank") ? !!config?.cardDeposit : method === "crypto" ? !!config?.cryptoDeposit : false;
+  const isHostedDeposit = kind === "deposit" && gatewayReady;
+  const showReference = kind === "withdraw" || (kind === "deposit" && !isHostedDeposit);
 
   // After an automated M-Pesa action, poll the wallet so the status flips from
   // pending to done (or the balance updates) without a manual refresh.
@@ -154,6 +209,11 @@ function MoneyForm({
       const json = await res.json();
       if (!res.ok) {
         setMsg({ text: json.error || "Request failed.", ok: false });
+      } else if (json.redirect && json.redirectUrl) {
+        // Hand off to the hosted checkout (card / bank / crypto).
+        setMsg({ text: "Redirecting to secure checkout…", ok: true });
+        window.location.href = json.redirectUrl;
+        return;
       } else {
         const fallback =
           kind === "deposit"
@@ -188,35 +248,44 @@ function MoneyForm({
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">Method</label>
-        <div className="grid grid-cols-3 gap-2">
-          {METHODS.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMethod(m.id)}
-              className={`btn py-1.5 text-xs ${
-                method === m.id ? "btn-brand" : "btn-ghost"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
+        <div className="grid grid-cols-4 gap-2">
+          {methods.map((m) => {
+            const Icon = m.icon;
+            return (
+              <button
+                key={m.id}
+                onClick={() => setMethod(m.id)}
+                className={`btn flex-col gap-1 py-2 text-[11px] ${
+                  method === m.id ? "btn-brand" : "btn-ghost"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {m.label}
+              </button>
+            );
+          })}
         </div>
       </div>
-      <div>
-        <label className="mb-1 block text-xs font-medium text-muted">
-          {isMpesa
-            ? "M-Pesa phone number"
-            : kind === "deposit"
-            ? "Sender reference"
-            : "Send to"}
-        </label>
-        <input
-          className="input"
-          placeholder={methodDef.hint}
-          value={reference}
-          onChange={(e) => setReference(e.target.value)}
-        />
-      </div>
+
+      {showReference && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">
+            {isMpesa
+              ? "M-Pesa phone number"
+              : kind === "deposit"
+              ? "Sender reference"
+              : method === "crypto"
+              ? "Your payout wallet address"
+              : "Send to"}
+          </label>
+          <input
+            className="input"
+            placeholder={methodDef.hint || "Account / name"}
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+          />
+        </div>
+      )}
 
       {isMpesa && amountNum > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-surface2/50 px-3 py-2 text-xs">
@@ -236,6 +305,12 @@ function MoneyForm({
       >
         {busy
           ? "Submitting…"
+          : isHostedDeposit && method === "crypto"
+          ? "Pay with Crypto"
+          : isHostedDeposit && method === "bank"
+          ? "Continue to Bank"
+          : isHostedDeposit
+          ? "Pay with Card"
           : automated && kind === "deposit"
           ? "Pay with M-Pesa"
           : automated
@@ -252,7 +327,11 @@ function MoneyForm({
       )}
 
       <p className="text-center text-[11px] leading-relaxed text-muted">
-        {automated && kind === "deposit"
+        {isHostedDeposit && method === "crypto"
+          ? "You’ll be taken to a secure page to pay with USDT, BTC and more. Your balance updates automatically once the payment confirms on-chain."
+          : isHostedDeposit
+          ? "You’ll be taken to a secure checkout to pay by card or bank. Your balance updates automatically once payment is confirmed."
+          : automated && kind === "deposit"
           ? "You’ll get an M-Pesa prompt on your phone. Enter your PIN and your balance updates automatically."
           : automated
           ? "Money is sent straight to your M-Pesa and usually arrives within a minute."

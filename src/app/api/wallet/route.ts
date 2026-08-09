@@ -3,6 +3,8 @@ import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
+import { isPaystackConfigured } from "@/lib/paystack";
+import { isCryptoConfigured } from "@/lib/crypto-pay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,6 +43,8 @@ export async function GET() {
     config: {
       mpesaDeposit: isMpesaConfigured(),
       mpesaWithdraw: isB2cConfigured(),
+      cardDeposit: isPaystackConfigured(),
+      cryptoDeposit: isCryptoConfigured(),
       usdKesRate: usdKesRate(),
     },
   });

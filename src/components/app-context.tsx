@@ -53,6 +53,8 @@ export type AppUser = {
 export type AppConfig = {
   mpesaDeposit: boolean;
   mpesaWithdraw: boolean;
+  cardDeposit: boolean;
+  cryptoDeposit: boolean;
   usdKesRate: number;
 };
 

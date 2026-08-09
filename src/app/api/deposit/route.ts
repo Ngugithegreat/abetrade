@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { cents } from "@/lib/format";
@@ -10,13 +11,16 @@ import {
   callbackBase,
   callbackToken,
 } from "@/lib/mpesa";
+import {
+  isPaystackConfigured,
+  initTransaction,
+  paystackAmountSubunit,
+} from "@/lib/paystack";
+import { isCryptoConfigured, createInvoice } from "@/lib/crypto-pay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Deposit. If method is 'mpesa' and Daraja is configured, an STK Push prompt is
-// sent to the customer's phone and the transaction stays 'pending' until the
-// M-Pesa callback confirms it. Otherwise it's a manual request an admin approves.
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -41,8 +45,10 @@ export async function POST(req: Request) {
 
   await ensureSchema();
   const sql = db();
+  const base = callbackBase(req.url);
+  const usd = amount / 100;
 
-  // ---- Automated M-Pesa deposit via STK Push ----
+  // ---------- M-Pesa (STK Push) ----------
   if (method === "mpesa" && isMpesaConfigured()) {
     const phone = normalizePhone(reference);
     if (!phone) {
@@ -52,14 +58,11 @@ export async function POST(req: Request) {
       );
     }
     const amountKes = centsToKes(amount);
-
     try {
-      const cbBase = callbackBase(req.url);
       const token = callbackToken();
-      const callbackUrl = `${cbBase}/api/mpesa/stk-callback${
+      const callbackUrl = `${base}/api/mpesa/stk-callback${
         token ? `?token=${encodeURIComponent(token)}` : ""
       }`;
-
       const stk = await stkPush({
         phone,
         amountKes,
@@ -67,7 +70,6 @@ export async function POST(req: Request) {
         description: "AbeTrade deposit",
         callbackUrl,
       });
-
       const rows = (await sql`
         INSERT INTO abetrade_transactions
           (user_id, type, amount, status, method, reference, provider_ref, note)
@@ -76,7 +78,6 @@ export async function POST(req: Request) {
            ${stk.CheckoutRequestID}, ${"STK push sent · KES " + amountKes})
         RETURNING *
       `) as any[];
-
       return NextResponse.json({
         ok: true,
         mpesa: true,
@@ -92,7 +93,62 @@ export async function POST(req: Request) {
     }
   }
 
-  // ---- Manual deposit (admin approval) ----
+  // ---------- Card / Bank (Paystack hosted checkout) ----------
+  if ((method === "card" || method === "bank") && isPaystackConfigured()) {
+    try {
+      const ref = `atk_${session.id}_${randomUUID().slice(0, 12)}`;
+      const init = await initTransaction({
+        email: session.email,
+        amountSubunit: paystackAmountSubunit(usd),
+        reference: ref,
+        callbackUrl: `${base}/wallet?deposit=processing`,
+        metadata: { userId: session.id, method },
+      });
+      await sql`
+        INSERT INTO abetrade_transactions
+          (user_id, type, amount, status, method, provider_ref, note)
+        VALUES
+          (${session.id}, 'deposit', ${amount}, 'pending', ${method}, ${init.reference},
+           ${"Awaiting " + method + " payment"})
+      `;
+      return NextResponse.json({ ok: true, redirect: true, redirectUrl: init.authorization_url });
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: e?.message || "Could not start card/bank checkout." },
+        { status: 502 }
+      );
+    }
+  }
+
+  // ---------- Crypto (NOWPayments invoice) ----------
+  if (method === "crypto" && isCryptoConfigured()) {
+    try {
+      const orderId = `atc_${session.id}_${randomUUID().slice(0, 12)}`;
+      const token = callbackToken();
+      const invoice = await createInvoice({
+        amountUsd: usd,
+        orderId,
+        ipnUrl: `${base}/api/crypto/webhook${token ? `?token=${encodeURIComponent(token)}` : ""}`,
+        successUrl: `${base}/wallet?deposit=processing`,
+        cancelUrl: `${base}/wallet`,
+      });
+      await sql`
+        INSERT INTO abetrade_transactions
+          (user_id, type, amount, status, method, provider_ref, note)
+        VALUES
+          (${session.id}, 'deposit', ${amount}, 'pending', 'crypto', ${orderId},
+           'Awaiting crypto payment')
+      `;
+      return NextResponse.json({ ok: true, redirect: true, redirectUrl: invoice.invoice_url });
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: e?.message || "Could not start the crypto payment." },
+        { status: 502 }
+      );
+    }
+  }
+
+  // ---------- Manual fallback (admin approval) ----------
   const rows = (await sql`
     INSERT INTO abetrade_transactions (user_id, type, amount, status, method, reference, note)
     VALUES (${session.id}, 'deposit', ${amount}, 'pending', ${method}, ${reference}, 'Deposit request')

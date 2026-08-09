@@ -201,9 +201,9 @@ export async function b2cPayment(opts: {
  * fall back to the Vercel deployment URL, then the request origin.
  */
 export function callbackBase(reqUrl: string): string {
-  if (process.env.MPESA_CALLBACK_BASE_URL) {
-    return process.env.MPESA_CALLBACK_BASE_URL.replace(/\/$/, "");
-  }
+  const explicit =
+    process.env.PUBLIC_BASE_URL || process.env.MPESA_CALLBACK_BASE_URL;
+  if (explicit) return explicit.replace(/\/$/, "");
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   try {
     return new URL(reqUrl).origin;
