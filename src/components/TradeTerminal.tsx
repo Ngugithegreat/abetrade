@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -18,7 +18,6 @@ import { Sparkles } from "lucide-react";
 import { useApp, Trade } from "./app-context";
 import { useDerivFeed, useDerivMarkets } from "@/lib/useDerivFeed";
 import { PriceChart } from "./PriceChart";
-import { Sparkline } from "./Sparkline";
 import { DigitHeatmap } from "./DigitHeatmap";
 import { BotPanel } from "./BotPanel";
 import { AiScanner, Signal } from "./AiScanner";
@@ -154,7 +153,7 @@ export function TradeTerminal() {
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
   return (
-    <div className="mx-auto max-w-[1480px] px-3 py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+    <div className="mx-auto max-w-[1480px] px-3 py-3">
       <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
@@ -163,10 +162,7 @@ export function TradeTerminal() {
         <StatChip label="Trades settled" value={String(settled)} />
       </div>
 
-      <div className="grid gap-3 lg:h-[calc(100%-4rem)] lg:grid-cols-[200px_1fr_346px]">
-        {/* Watchlist (memoized — doesn't re-render on every price tick) */}
-        <Watchlist markets={markets} symbol={symbol} onSelect={setSymbol} />
-
+      <div className="grid gap-3 lg:h-[600px] lg:grid-cols-[1fr_372px]">
         {/* Chart + digit strip */}
         <div className="flex min-h-0 flex-col gap-3">
           <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -408,36 +404,42 @@ export function TradeTerminal() {
               </p>
             )}
           </div>
+        </div>
+      </div>
 
-          <div className="card flex h-44 shrink-0 flex-col overflow-hidden">
-            <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-              {(["open", "closed"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setPosTab(t)}
-                  className={`rounded-lg px-3 py-1 text-xs font-semibold capitalize transition ${
-                    posTab === t ? "bg-surface2 text-fg" : "text-muted hover:text-fg"
-                  }`}
-                >
-                  {t} ({t === "open" ? openTrades.length : closed.length})
-                </button>
-              ))}
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {posTab === "open" ? (
-                <OpenPositions
-                  trades={openTrades}
-                  onSettled={refresh}
-                  liveSymbol={symbol}
-                  livePrice={feed.last?.price ?? null}
-                  showToast={showToast}
-                  setBalance={setBalance}
-                />
-              ) : (
-                <ClosedPositions trades={closed} />
-              )}
-            </div>
-          </div>
+      {/* Positions — full width so every trader can read them at a glance */}
+      <div className="card mt-3 flex flex-col overflow-hidden">
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          {(["open", "closed"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setPosTab(t)}
+              className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold capitalize transition ${
+                posTab === t ? "bg-surface2 text-fg" : "text-muted hover:text-fg"
+              }`}
+            >
+              {t} ({t === "open" ? openTrades.length : closed.length})
+            </button>
+          ))}
+          <span className="ml-auto hidden text-[11px] text-muted sm:block">
+            {posTab === "open"
+              ? "Live positions settle automatically at expiry"
+              : "Your recent settled trades"}
+          </span>
+        </div>
+        <div className="max-h-[380px] min-h-[150px] overflow-y-auto">
+          {posTab === "open" ? (
+            <OpenPositions
+              trades={openTrades}
+              onSettled={refresh}
+              liveSymbol={symbol}
+              livePrice={feed.last?.price ?? null}
+              showToast={showToast}
+              setBalance={setBalance}
+            />
+          ) : (
+            <ClosedPositions trades={closed} />
+          )}
         </div>
       </div>
 
@@ -636,61 +638,7 @@ function DigitControls({
 
 /* ---------------- Small pieces ---------------- */
 
-/* Memoized watchlist — only re-renders when market prices or the selection
-   change, NOT on every render of the terminal (keeps the chart smooth). */
-const Watchlist = memo(function Watchlist({
-  markets,
-  symbol,
-  onSelect,
-}: {
-  markets: Record<string, any>;
-  symbol: string;
-  onSelect: (s: string) => void;
-}) {
-  return (
-    <div className="card hidden min-h-0 flex-col overflow-hidden lg:flex">
-      <div className="border-b border-border px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted">
-        Markets
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {MARKETS.map((m) => {
-          const t = markets[m.symbol];
-          const chg =
-            t?.last != null && t?.open != null && t.open !== 0
-              ? ((t.last - t.open) / t.open) * 100
-              : 0;
-          const up = chg >= 0;
-          const active = m.symbol === symbol;
-          return (
-            <button
-              key={m.symbol}
-              onClick={() => onSelect(m.symbol)}
-              className={`flex w-full items-center justify-between gap-1.5 border-l-2 px-2.5 py-2 text-left transition ${
-                active ? "border-brand bg-brand/10" : "border-transparent hover:bg-surface2"
-              }`}
-            >
-              <div className="min-w-0">
-                <div className={`text-[13px] font-bold ${active ? "text-brand" : ""}`}>{m.short}</div>
-                <div className="tabular text-[10px] text-muted">
-                  {t?.last != null ? t.last.toFixed(m.decimals) : "—"}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Sparkline points={t?.points ?? []} up={up} width={40} height={20} />
-                <span className={`tabular w-11 text-right text-[10px] font-semibold ${up ? "text-up" : "text-down"}`}>
-                  {up ? "+" : ""}
-                  {chg.toFixed(2)}%
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-});
-
-/* Symbol dropdown in the chart header (works on mobile where the watchlist is hidden). */
+/* Symbol dropdown in the chart header — the single place to switch markets. */
 function MarketDropdown({ symbol, onSelect }: { symbol: string; onSelect: (s: string) => void }) {
   const [open, setOpen] = useState(false);
   const market = marketBySymbol(symbol)!;
@@ -895,7 +843,7 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
   }
 
   return (
-    <div className="divide-y divide-border">
+    <div className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
       {list.map((t) => {
         const m = marketBySymbol(t.symbol);
         const isLive = t.symbol === liveSymbol && livePrice != null;
@@ -979,7 +927,7 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between px-3.5 py-2.5">
+    <div className="flex items-center justify-between rounded-xl border border-border bg-surface2/40 px-3.5 py-2.5">
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold">{m}</span>
@@ -1016,7 +964,7 @@ function ClosedPositions({ trades }: { trades: Trade[] }) {
       : -Number(t.stake);
 
   return (
-    <div className="divide-y divide-border">
+    <div className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
       {trades.map((t) => {
         const won = t.status === "won";
         const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);

@@ -9,6 +9,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { LandingChart } from "@/components/LandingChart";
 import { MARKETS, PAYOUT_MULTIPLIER } from "@/lib/markets";
 
@@ -22,6 +23,7 @@ export default function Landing() {
           <span className="text-xl font-bold tracking-tight">SinTrades</span>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Link href="/login" className="btn btn-ghost px-4 py-2 text-sm">
             Sign in
           </Link>
