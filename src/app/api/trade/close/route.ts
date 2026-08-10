@@ -5,6 +5,7 @@ import { closeMultiplier, TradeRow } from "@/lib/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 // Close an open multiplier position at the current real market price.
 export async function POST(req: Request) {

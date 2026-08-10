@@ -18,6 +18,7 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 const KINDS = ["rise_fall", "mult", "digit"];
 
@@ -110,9 +111,9 @@ export async function POST(req: Request) {
   let entry;
   try {
     entry = await getLatestTick(symbol);
-  } catch {
+  } catch (e: any) {
     return NextResponse.json(
-      { error: "Couldn't reach the price feed. Try again." },
+      { error: `Couldn't reach the price feed. Try again. [${e?.message || "no response"}]` },
       { status: 503 }
     );
   }

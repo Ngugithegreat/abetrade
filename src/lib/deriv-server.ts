@@ -14,6 +14,22 @@ const ENDPOINT = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
 
 export type Tick = { price: number; epoch: number };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Retry a Deriv call — datacenter IPs on the shared app_id get throttled. */
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (i < attempts - 1) await sleep(350 + i * 350);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Deriv unavailable");
+}
+
 /**
  * Opens a short-lived connection, sends one request, resolves with the first
  * matching response, then closes. Rejects on timeout or API error.
@@ -21,10 +37,10 @@ export type Tick = { price: number; epoch: number };
 function request<T>(
   payload: Record<string, unknown>,
   pick: (msg: any) => T | undefined,
-  timeoutMs = 8000
+  timeoutMs = 9000
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(ENDPOINT);
+    const ws = new WebSocket(ENDPOINT, { handshakeTimeout: 8000 });
     let done = false;
 
     const finish = (err: Error | null, val?: T) => {
@@ -66,7 +82,7 @@ function request<T>(
 
 /** Latest tick for a symbol, right now. */
 export async function getLatestTick(symbol: string): Promise<Tick> {
-  return request<Tick>(
+  return withRetry(() => request<Tick>(
     {
       ticks_history: symbol,
       end: "latest",
@@ -83,7 +99,7 @@ export async function getLatestTick(symbol: string): Promise<Tick> {
       }
       return undefined;
     }
-  );
+  ));
 }
 
 /**
@@ -94,7 +110,7 @@ export async function getTickAtOrAfter(
   symbol: string,
   epoch: number
 ): Promise<Tick | null> {
-  return request<Tick | null>(
+  return withRetry(() => request<Tick | null>(
     {
       ticks_history: symbol,
       start: epoch,
@@ -114,5 +130,5 @@ export async function getTickAtOrAfter(
       // No tick at/after expiry yet -> null (caller keeps the trade open).
       return null;
     }
-  );
+  ));
 }

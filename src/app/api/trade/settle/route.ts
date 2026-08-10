@@ -5,6 +5,7 @@ import { settleTrade, TradeRow } from "@/lib/trades";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 // Settle a single trade (called by the client when a contract's timer expires).
 // Server re-checks expiry and outcome against the real feed, so this can't be
