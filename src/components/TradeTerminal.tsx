@@ -163,8 +163,8 @@ export function TradeTerminal() {
       </div>
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
-        {/* LEFT · Positions (transactions) */}
-        <div className="card flex min-h-0 flex-col overflow-hidden">
+        {/* LEFT · Positions (transactions) — drops to the bottom on phones */}
+        <div className="card order-last flex min-h-0 flex-col overflow-hidden max-h-[46vh] lg:order-none lg:max-h-none">
           <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-2">
             {(["open", "closed"] as const).map((t) => (
               <button
@@ -194,21 +194,21 @@ export function TradeTerminal() {
           </div>
         </div>
 
-        {/* MIDDLE · Chart + live digits */}
-        <div className="card flex min-h-0 flex-col overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-              <div>
+        {/* MIDDLE · Chart + live digits — shown first on phones */}
+        <div className="card order-first flex min-h-[62vh] flex-col overflow-hidden lg:order-none lg:min-h-[0]">
+            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <MarketDropdown symbol={symbol} onSelect={setSymbol} />
                   <ConnBadge connected={feed.connected} />
                 </div>
-                <div className="text-[11px] text-muted">
+                <div className="truncate text-[11px] text-muted">
                   {market.volatility} volatility · synthetic index
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex shrink-0 items-center gap-3 sm:gap-4">
                 {curDigit != null && (
-                  <div className="text-center">
+                  <div className="hidden text-center sm:block">
                     <div className="text-[9px] uppercase tracking-wider text-muted">Last digit</div>
                     <div className="tabular text-2xl font-black leading-none text-brand">
                       {curDigit}
@@ -217,7 +217,7 @@ export function TradeTerminal() {
                 )}
                 <div className="text-right">
                   <div
-                    className={`tabular text-2xl font-bold leading-none ${
+                    className={`tabular text-xl font-bold leading-none sm:text-2xl ${
                       rising ? "text-up" : "text-down"
                     }`}
                   >
@@ -260,12 +260,12 @@ export function TradeTerminal() {
 
             {/* Digit strip — part of the chart, shown while trading digits */}
             {contract === "digit" && (
-              <div className="shrink-0 border-t border-border bg-surface2/70 px-4 py-3">
-                <div className="mb-2 flex items-center justify-between">
+              <div className="shrink-0 border-t border-border bg-surface2/70 px-2 py-3 sm:px-4">
+                <div className="mb-2 flex items-center justify-between px-1">
                   <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-fg">
                     <Hash className="h-3.5 w-3.5 text-brand" /> Live last digits
                   </span>
-                  <span className="text-[11px] text-muted">tap a number to set your barrier</span>
+                  <span className="hidden text-[11px] text-muted sm:block">tap a number to set your barrier</span>
                 </div>
                 <DigitHeatmap
                   points={feed.points}
@@ -637,10 +637,10 @@ function MarketDropdown({ symbol, onSelect }: { symbol: string; onSelect: (s: st
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded-lg px-1.5 py-0.5 text-base font-bold transition hover:bg-surface2"
+        className="flex max-w-[56vw] items-center gap-1.5 rounded-lg px-1.5 py-0.5 text-sm font-bold transition hover:bg-surface2 sm:max-w-none sm:text-base"
       >
-        {market.name}
-        <ChevronDown className={`h-4 w-4 text-muted transition ${open ? "rotate-180" : ""}`} />
+        <span className="truncate">{market.name}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <>

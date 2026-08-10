@@ -39,7 +39,7 @@ export function DigitHeatmap({
   const C = 2 * Math.PI * R;
 
   return (
-    <div className="grid grid-cols-10 gap-1.5">
+    <div className="grid grid-cols-10 gap-0.5 sm:gap-1.5">
       {pcts.map((pct, d) => {
         const isCurrent = d === current;
         const isHot = d === hot;
@@ -50,15 +50,15 @@ export function DigitHeatmap({
           <button
             key={d}
             onClick={onPick ? () => onPick(d) : undefined}
-            className={`group flex flex-col items-center gap-1 rounded-xl py-1.5 transition ${
+            className={`group flex flex-col items-center gap-0.5 rounded-lg py-1 transition sm:gap-1 sm:rounded-xl sm:py-1.5 ${
               isSel ? "bg-brand/10 ring-1 ring-brand" : ""
             } ${onPick ? "cursor-pointer hover:bg-surface2" : "cursor-default"}`}
           >
-            <div className="relative h-12 w-12">
+            <div className="relative h-8 w-8 sm:h-12 sm:w-12">
               {isCurrent && (
                 <span className="absolute -top-2 left-1/2 h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-brand" />
               )}
-              <svg viewBox="0 0 40 40" className="h-12 w-12">
+              <svg viewBox="0 0 40 40" className="h-8 w-8 sm:h-12 sm:w-12">
                 <circle cx="20" cy="20" r={R} fill="none" stroke="rgb(var(--border))" strokeWidth="3.5" />
                 <circle
                   cx="20"
@@ -86,7 +86,7 @@ export function DigitHeatmap({
                 </text>
               </svg>
             </div>
-            <span className="tabular text-[10px] font-semibold text-muted">{pct.toFixed(0)}%</span>
+            <span className="tabular text-[9px] font-semibold text-muted sm:text-[10px]">{pct.toFixed(0)}%</span>
           </button>
         );
       })}
