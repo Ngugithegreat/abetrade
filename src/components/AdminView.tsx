@@ -332,8 +332,7 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
           </div>
           <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
             The edge baked into every payout. At {pct || 0}% the house keeps ~{pct || 0}% of all
-            volume over time. Rise/Fall pays {(2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}× — players
-            still see live payouts, so this is transparent, not rigged.
+            volume over time. Rise/Fall pays {(2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}×.
           </p>
         </div>
         <div className="flex items-center gap-2">
