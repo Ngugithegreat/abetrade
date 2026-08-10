@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { isProduction } from "@/lib/mpesa";
+import { isProduction, mpesaEnvValue } from "@/lib/mpesa";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,7 +89,7 @@ export async function GET() {
         MPESA_CONSUMER_SECRET: !!process.env.MPESA_CONSUMER_SECRET,
         MPESA_SHORTCODE: !!process.env.MPESA_SHORTCODE,
         MPESA_PASSKEY: !!process.env.MPESA_PASSKEY,
-        MPESA_ENV: (process.env.MPESA_ENV || "").trim() || null,
+        MPESA_ENV: mpesaEnvValue() || null,
         is_production: isProduction(),
         deposits_ready:
           !!process.env.MPESA_CONSUMER_KEY &&

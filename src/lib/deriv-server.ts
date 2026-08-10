@@ -42,7 +42,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
 function request<T>(
   payload: Record<string, unknown>,
   pick: (msg: any) => T | undefined,
-  timeoutMs = 6000
+  timeoutMs = 5000
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     let ws: any;

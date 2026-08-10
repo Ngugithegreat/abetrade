@@ -11,8 +11,13 @@ function env(name: string): string {
   return (process.env[name] || "").trim();
 }
 
+/** The configured M-Pesa env, accepting either MPESA_ENV or MPESA_ENVIRONMENT. */
+export function mpesaEnvValue(): string {
+  return (env("MPESA_ENV") || env("MPESA_ENVIRONMENT")).toLowerCase();
+}
+
 export function isProduction(): boolean {
-  const v = env("MPESA_ENV").toLowerCase();
+  const v = mpesaEnvValue();
   return v === "production" || v === "prod" || v === "live";
 }
 
