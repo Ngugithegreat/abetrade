@@ -112,6 +112,9 @@ export function TradeTerminal() {
           subtype,
           barrier,
           ticks: digitTicks,
+          // Client's live tick — lets digit trades place instantly (entry price
+          // doesn't affect a digit outcome, so this is safe).
+          entry: feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : undefined,
           ...extra,
         };
       const res = await fetch("/api/trade", {

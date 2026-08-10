@@ -108,14 +108,31 @@ export async function POST(req: Request) {
   await ensureSchema();
   const sql = db();
 
-  let entry;
-  try {
-    entry = await getLatestTick(symbol);
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: `Couldn't reach the price feed. Try again. [${e?.message || "no response"}]` },
-      { status: 503 }
-    );
+  // Entry tick. For DIGIT contracts the entry price is irrelevant to the outcome
+  // (only the exit digit matters), so we trust a recent client-provided tick to
+  // place instantly — no wait on the server's WebSocket. Rise/Fall & Multipliers
+  // must fetch server-side (entry sets the threshold).
+  let entry: { price: number; epoch: number } | undefined;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const ce = body.entry;
+  if (
+    kind === "digit" &&
+    ce &&
+    Number.isFinite(Number(ce.price)) &&
+    Number.isFinite(Number(ce.epoch)) &&
+    Math.abs(nowSec - Number(ce.epoch)) < 25
+  ) {
+    entry = { price: Number(ce.price), epoch: Number(ce.epoch) };
+  }
+  if (!entry) {
+    try {
+      entry = await getLatestTick(symbol);
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: `Couldn't reach the price feed. Try again. [${e?.message || "no response"}]` },
+        { status: 503 }
+      );
+    }
   }
 
   const debit = (await sql`

@@ -1,4 +1,4 @@
-import WebSocket from "ws";
+import NodeWS from "ws";
 
 // Server-side helpers that talk to Deriv's public WebSocket API to get REAL
 // prices. Used to (a) stamp a trade's entry price and (b) settle it against the
@@ -7,22 +7,28 @@ import WebSocket from "ws";
 
 // Deriv's public gateway for symbols/ticks/pricing — no app_id and no auth,
 // so it isn't rate-limited by the shared 1089 id from datacenter (Vercel) IPs.
-// Same request/response protocol as the classic v3 API.
 const ENDPOINT = "wss://api.derivws.com/trading/v1/options/ws/public";
 
 export type Tick = { price: number; epoch: number };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Retry a Deriv call — datacenter IPs on the shared app_id get throttled. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+// Prefer Node's built-in WebSocket (Node 22+) — it's more reliable inside the
+// Vercel/Lambda bundle than the `ws` package. Fall back to `ws` on older Node.
+function createSocket(url: string): any {
+  const G: any = globalThis as any;
+  if (typeof G.WebSocket === "function") return new G.WebSocket(url);
+  return new NodeWS(url);
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (e) {
       lastErr = e;
-      if (i < attempts - 1) await sleep(350 + i * 350);
+      if (i < attempts - 1) await sleep(300);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("Deriv unavailable");
@@ -30,15 +36,21 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 
 /**
  * Opens a short-lived connection, sends one request, resolves with the first
- * matching response, then closes. Rejects on timeout or API error.
+ * matching response, then closes. Uses the browser-style event API, which both
+ * the native WebSocket and the `ws` package support.
  */
 function request<T>(
   payload: Record<string, unknown>,
   pick: (msg: any) => T | undefined,
-  timeoutMs = 9000
+  timeoutMs = 6000
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(ENDPOINT, { handshakeTimeout: 8000 });
+    let ws: any;
+    try {
+      ws = createSocket(ENDPOINT);
+    } catch (e) {
+      return reject(e as Error);
+    }
     let done = false;
 
     const finish = (err: Error | null, val?: T) => {
@@ -59,12 +71,19 @@ function request<T>(
       timeoutMs
     );
 
-    ws.on("open", () => ws.send(JSON.stringify(payload)));
-    ws.on("error", (e) => finish(e as Error));
-    ws.on("message", (raw) => {
+    ws.onopen = () => {
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch (e) {
+        finish(e as Error);
+      }
+    };
+    ws.onerror = (e: any) => finish(new Error(e?.message || "Deriv socket error"));
+    ws.onclose = () => finish(new Error("Deriv socket closed"));
+    ws.onmessage = (ev: any) => {
       let msg: any;
       try {
-        msg = JSON.parse(raw.toString());
+        msg = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString());
       } catch {
         return;
       }
@@ -74,7 +93,7 @@ function request<T>(
       }
       const val = pick(msg);
       if (val !== undefined) finish(null, val);
-    });
+    };
   });
 }
 

@@ -243,10 +243,14 @@ function SetupCard({ setup }: { setup: any }) {
         <div className="text-sm font-bold">Payment setup</div>
         <span
           className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
-            setup.mpesa.deposits_ready ? "bg-up/15 text-up" : "bg-down/15 text-down"
+            setup.mpesa.deposits_ready && setup.mpesa.is_production
+              ? "bg-up/15 text-up"
+              : "bg-down/15 text-down"
           }`}
         >
-          M-Pesa {setup.mpesa.deposits_ready ? "LIVE" : "OFF"} · {setup.mpesa.MPESA_ENV}
+          M-Pesa {setup.mpesa.deposits_ready ? "keys ✓" : "OFF"} · MPESA_ENV=
+          {setup.mpesa.MPESA_ENV ?? "(not set → sandbox)"}
+          {setup.mpesa.is_production ? " · PRODUCTION" : " · SANDBOX"}
         </span>
       </div>
       <p className="mb-3 text-[11px] leading-relaxed text-muted">
