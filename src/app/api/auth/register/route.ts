@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { hashPassword, createSession } from "@/lib/auth";
+import { sendEmail, welcomeEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,6 +57,10 @@ export async function POST(req: Request) {
       name: user.name,
       role: user.role,
     });
+
+    // Welcome email — fire-and-forget so signup never blocks or fails on email.
+    const w = welcomeEmail(user.name);
+    sendEmail({ to: user.email, subject: w.subject, html: w.html, text: w.text }).catch(() => {});
 
     return NextResponse.json({ ok: true, user: { ...user, balance: 0 } });
   } catch (e: any) {

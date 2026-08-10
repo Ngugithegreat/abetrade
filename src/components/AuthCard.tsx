@@ -196,6 +196,11 @@ function SignInForm(p: SharedProps) {
         onChange={(e) => p.setPassword(e.target.value)}
         required
       />
+      <div className="text-right">
+        <a href="/forgot-password" className="text-xs text-muted hover:text-brand">
+          Forgot password?
+        </a>
+      </div>
       {p.error && <p className="text-sm text-down">{p.error}</p>}
       <button type="submit" disabled={p.busy} className="btn btn-brand w-full py-2.5">
         {p.busy ? "Please wait…" : "Sign in"}
