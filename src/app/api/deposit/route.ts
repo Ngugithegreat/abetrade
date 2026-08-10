@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { cents } from "@/lib/format";
 import {
   isMpesaConfigured,
+  isProduction,
   normalizePhone,
   centsToKes,
   stkPush,
@@ -102,7 +103,11 @@ export async function POST(req: Request) {
       });
     } catch (e: any) {
       return NextResponse.json(
-        { error: e?.message || "Could not start the M-Pesa prompt. Try again." },
+        {
+          error:
+            (e?.message || "Could not start the M-Pesa prompt. Try again.") +
+            ` [Daraja env: ${isProduction() ? "production" : "sandbox"}]`,
+        },
         { status: 502 }
       );
     }

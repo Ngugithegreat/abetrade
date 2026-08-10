@@ -6,10 +6,18 @@
 const SANDBOX_BASE = "https://sandbox.safaricom.co.ke";
 const PROD_BASE = "https://api.safaricom.co.ke";
 
+/** Read an env var, trimmed (copy-paste often leaves trailing spaces/newlines). */
+function env(name: string): string {
+  return (process.env[name] || "").trim();
+}
+
+export function isProduction(): boolean {
+  const v = env("MPESA_ENV").toLowerCase();
+  return v === "production" || v === "prod" || v === "live";
+}
+
 function base(): string {
-  return (process.env.MPESA_ENV || "sandbox").toLowerCase() === "production"
-    ? PROD_BASE
-    : SANDBOX_BASE;
+  return isProduction() ? PROD_BASE : SANDBOX_BASE;
 }
 
 export function isMpesaConfigured(): boolean {
@@ -70,8 +78,8 @@ function b64(s: string): string {
 }
 
 async function accessToken(): Promise<string> {
-  const key = process.env.MPESA_CONSUMER_KEY!;
-  const secret = process.env.MPESA_CONSUMER_SECRET!;
+  const key = env("MPESA_CONSUMER_KEY");
+  const secret = env("MPESA_CONSUMER_SECRET");
   const res = await fetch(
     `${base()}/oauth/v1/generate?grant_type=client_credentials`,
     {
@@ -79,9 +87,14 @@ async function accessToken(): Promise<string> {
       cache: "no-store",
     }
   );
-  if (!res.ok) throw new Error(`M-Pesa auth failed (${res.status})`);
-  const json = await res.json();
-  if (!json.access_token) throw new Error("M-Pesa auth: no token");
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.access_token) {
+    const where = isProduction() ? "production" : "sandbox";
+    throw new Error(
+      `M-Pesa auth failed on the ${where} endpoint (${res.status}). ` +
+        `Check the Consumer Key/Secret and that MPESA_ENV matches your keys.`
+    );
+  }
   return json.access_token as string;
 }
 
@@ -120,8 +133,8 @@ export async function stkPush(opts: {
   description: string;
   callbackUrl: string;
 }): Promise<StkPushResult> {
-  const shortcode = process.env.MPESA_SHORTCODE!;
-  const passkey = process.env.MPESA_PASSKEY!;
+  const shortcode = env("MPESA_SHORTCODE");
+  const passkey = env("MPESA_PASSKEY");
   const ts = timestamp();
   const txnType =
     (process.env.MPESA_STK_TX_TYPE || "CustomerPayBillOnline").trim();
@@ -154,8 +167,8 @@ export type StkQueryResult = {
 export async function stkQuery(
   checkoutRequestId: string
 ): Promise<StkQueryResult> {
-  const shortcode = process.env.MPESA_SHORTCODE!;
-  const passkey = process.env.MPESA_PASSKEY!;
+  const shortcode = env("MPESA_SHORTCODE");
+  const passkey = env("MPESA_PASSKEY");
   const ts = timestamp();
   return daraja<StkQueryResult>("/mpesa/stkpushquery/v1/query", {
     BusinessShortCode: shortcode,
@@ -180,11 +193,10 @@ export async function b2cPayment(opts: {
   resultUrl: string;
   timeoutUrl: string;
 }): Promise<B2cResult> {
-  const shortcode =
-    process.env.MPESA_B2C_SHORTCODE || process.env.MPESA_SHORTCODE!;
+  const shortcode = env("MPESA_B2C_SHORTCODE") || env("MPESA_SHORTCODE");
   return daraja<B2cResult>("/mpesa/b2c/v1/paymentrequest", {
-    InitiatorName: process.env.MPESA_INITIATOR_NAME!,
-    SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL!,
+    InitiatorName: env("MPESA_INITIATOR_NAME"),
+    SecurityCredential: env("MPESA_SECURITY_CREDENTIAL"),
     CommandID: process.env.MPESA_B2C_COMMAND || "BusinessPayment",
     Amount: opts.amountKes,
     PartyA: shortcode,
