@@ -90,7 +90,7 @@ export function PriceChart({
   return (
     <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 10, right: 66, bottom: 4, left: 6 }}>
+        <AreaChart data={data} margin={{ top: 10, right: 10, bottom: 4, left: 6 }}>
           <defs>
             <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity={0.28} />
@@ -116,8 +116,10 @@ export function PriceChart({
           <YAxis
             domain={[min - pad, max + pad]}
             orientation="right"
-            width={62}
-            tick={{ fill: axisColor, fontSize: 11 }}
+            mirror
+            width={10}
+            tickMargin={2}
+            tick={{ fill: axisColor, fontSize: 10 }}
             tickFormatter={fmt}
             tickCount={7}
             axisLine={false}

@@ -153,16 +153,17 @@ export function TradeTerminal() {
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
   return (
-    <div className="mx-auto flex max-w-[1640px] flex-col px-3 py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+    <div className="mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
       <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
-      <div className="mb-3 grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* KPI strip — hidden on phones so the trade controls fit on one screen */}
+      <div className="mb-3 hidden shrink-0 grid-cols-2 gap-2 sm:grid sm:grid-cols-4">
         <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
         <StatChip label="Open positions" value={String(openTrades.length)} />
         <StatChip label="Win rate" value={settled ? `${winRate}%` : "—"} />
         <StatChip label="Trades settled" value={String(settled)} />
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
+      <div className="grid min-h-0 flex-1 gap-2 sm:gap-3 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
         {/* LEFT · Positions (transactions) — drops to the bottom on phones */}
         <div className="card order-last flex min-h-0 flex-col overflow-hidden max-h-[46vh] lg:order-none lg:max-h-none">
           <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-2">
@@ -195,7 +196,7 @@ export function TradeTerminal() {
         </div>
 
         {/* MIDDLE · Chart + live digits — shown first on phones */}
-        <div className="card order-first flex min-h-[62vh] flex-col overflow-hidden lg:order-none lg:min-h-[0]">
+        <div className="card order-first flex h-[36vh] flex-col overflow-hidden lg:order-none lg:h-auto lg:min-h-[0]">
             <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -234,7 +235,7 @@ export function TradeTerminal() {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-4 border-b border-border px-4 py-1.5 text-[11px] text-muted">
+            <div className="hidden items-center gap-4 border-b border-border px-4 py-1.5 text-[11px] text-muted sm:flex">
               <span>
                 High <span className="tabular text-up">{hi ? hi.toFixed(dp) : "—"}</span>
               </span>
@@ -247,7 +248,7 @@ export function TradeTerminal() {
               {feed.points.length === 0 ? (
                 <ChartSkeleton connected={feed.connected} />
               ) : (
-                <div className="h-full min-h-[200px]">
+                <div className="h-full">
                   <PriceChart
                     points={feed.points}
                     up={rising}
@@ -278,9 +279,9 @@ export function TradeTerminal() {
           </div>
 
         {/* RIGHT · Ticket */}
-        <div className="card min-h-0 overflow-y-auto p-3.5">
+        <div className="card min-h-0 overflow-y-auto p-3 sm:p-3.5">
             {/* Manual / Auto + AI */}
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-2 flex items-center gap-2 sm:mb-3">
               <div className="flex flex-1 rounded-xl bg-surface2 p-1">
                 {(["manual", "auto"] as const).map((mo) => (
                   <button
@@ -306,7 +307,7 @@ export function TradeTerminal() {
               </button>
             </div>
 
-            <div className={`mb-3 grid gap-1.5 ${mode === "auto" ? "grid-cols-2" : "grid-cols-3"}`}>
+            <div className={`mb-2 grid gap-1.5 sm:mb-3 ${mode === "auto" ? "grid-cols-2" : "grid-cols-3"}`}>
               {(mode === "auto"
                 ? ([["rise_fall", "Rise/Fall"], ["digit", "Digits"]] as [Contract, string][])
                 : ([["rise_fall", "Rise/Fall"], ["digit", "Digits"], ["mult", "Multipliers"]] as [Contract, string][])
