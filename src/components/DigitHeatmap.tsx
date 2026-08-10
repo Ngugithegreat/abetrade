@@ -54,11 +54,11 @@ export function DigitHeatmap({
               isSel ? "bg-brand/10 ring-1 ring-brand" : ""
             } ${onPick ? "cursor-pointer hover:bg-surface2" : "cursor-default"}`}
           >
-            <div className="relative h-10 w-10">
+            <div className="relative h-12 w-12">
               {isCurrent && (
                 <span className="absolute -top-2 left-1/2 h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-brand" />
               )}
-              <svg viewBox="0 0 40 40" className="h-10 w-10">
+              <svg viewBox="0 0 40 40" className="h-12 w-12">
                 <circle cx="20" cy="20" r={R} fill="none" stroke="rgb(var(--border))" strokeWidth="3.5" />
                 <circle
                   cx="20"
@@ -86,7 +86,7 @@ export function DigitHeatmap({
                 </text>
               </svg>
             </div>
-            <span className="tabular text-[9px] text-muted">{pct.toFixed(0)}%</span>
+            <span className="tabular text-[10px] font-semibold text-muted">{pct.toFixed(0)}%</span>
           </button>
         );
       })}

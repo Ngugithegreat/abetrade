@@ -153,19 +153,49 @@ export function TradeTerminal() {
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
   return (
-    <div className="mx-auto max-w-[1480px] px-3 py-3">
+    <div className="mx-auto flex max-w-[1640px] flex-col px-3 py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
       <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
-      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mb-3 grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
         <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
         <StatChip label="Open positions" value={String(openTrades.length)} />
         <StatChip label="Win rate" value={settled ? `${winRate}%` : "—"} />
         <StatChip label="Trades settled" value={String(settled)} />
       </div>
 
-      <div className="grid gap-3 lg:h-[600px] lg:grid-cols-[1fr_372px]">
-        {/* Chart + digit strip */}
-        <div className="flex min-h-0 flex-col gap-3">
-          <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
+        {/* LEFT · Positions (transactions) */}
+        <div className="card flex min-h-0 flex-col overflow-hidden">
+          <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-2">
+            {(["open", "closed"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setPosTab(t)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  posTab === t ? "bg-surface2 text-fg" : "text-muted hover:text-fg"
+                }`}
+              >
+                {t} ({t === "open" ? openTrades.length : closed.length})
+              </button>
+            ))}
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {posTab === "open" ? (
+              <OpenPositions
+                trades={openTrades}
+                onSettled={refresh}
+                liveSymbol={symbol}
+                livePrice={feed.last?.price ?? null}
+                showToast={showToast}
+                setBalance={setBalance}
+              />
+            ) : (
+              <ClosedPositions trades={closed} />
+            )}
+          </div>
+        </div>
+
+        {/* MIDDLE · Chart + live digits */}
+        <div className="card flex min-h-0 flex-col overflow-hidden">
             <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
               <div>
                 <div className="flex items-center gap-2">
@@ -230,12 +260,12 @@ export function TradeTerminal() {
 
             {/* Digit strip — part of the chart, shown while trading digits */}
             {contract === "digit" && (
-              <div className="shrink-0 border-t border-border bg-surface2/50 px-3 py-2.5">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                    <Hash className="h-3 w-3 text-brand" /> Last digits · live
+              <div className="shrink-0 border-t border-border bg-surface2/70 px-4 py-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-fg">
+                    <Hash className="h-3.5 w-3.5 text-brand" /> Live last digits
                   </span>
-                  <span className="text-[10px] text-muted">tap a digit to set barrier</span>
+                  <span className="text-[11px] text-muted">tap a number to set your barrier</span>
                 </div>
                 <DigitHeatmap
                   points={feed.points}
@@ -246,11 +276,9 @@ export function TradeTerminal() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Ticket + positions */}
-        <div className="flex min-h-0 flex-col gap-3">
-          <div className="card min-h-0 flex-1 overflow-y-auto p-3.5">
+        {/* RIGHT · Ticket */}
+        <div className="card min-h-0 overflow-y-auto p-3.5">
             {/* Manual / Auto + AI */}
             <div className="mb-3 flex items-center gap-2">
               <div className="flex flex-1 rounded-xl bg-surface2 p-1">
@@ -404,43 +432,6 @@ export function TradeTerminal() {
               </p>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Positions — full width so every trader can read them at a glance */}
-      <div className="card mt-3 flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          {(["open", "closed"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setPosTab(t)}
-              className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold capitalize transition ${
-                posTab === t ? "bg-surface2 text-fg" : "text-muted hover:text-fg"
-              }`}
-            >
-              {t} ({t === "open" ? openTrades.length : closed.length})
-            </button>
-          ))}
-          <span className="ml-auto hidden text-[11px] text-muted sm:block">
-            {posTab === "open"
-              ? "Live positions settle automatically at expiry"
-              : "Your recent settled trades"}
-          </span>
-        </div>
-        <div className="max-h-[380px] min-h-[150px] overflow-y-auto">
-          {posTab === "open" ? (
-            <OpenPositions
-              trades={openTrades}
-              onSettled={refresh}
-              liveSymbol={symbol}
-              livePrice={feed.last?.price ?? null}
-              showToast={showToast}
-              setBalance={setBalance}
-            />
-          ) : (
-            <ClosedPositions trades={closed} />
-          )}
-        </div>
       </div>
 
       {toast && (
@@ -843,7 +834,7 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
   }
 
   return (
-    <div className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-col gap-2 p-2">
       {list.map((t) => {
         const m = marketBySymbol(t.symbol);
         const isLive = t.symbol === liveSymbol && livePrice != null;
@@ -964,7 +955,7 @@ function ClosedPositions({ trades }: { trades: Trade[] }) {
       : -Number(t.stake);
 
   return (
-    <div className="grid grid-cols-1 gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-col gap-2 p-2">
       {trades.map((t) => {
         const won = t.status === "won";
         const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);
