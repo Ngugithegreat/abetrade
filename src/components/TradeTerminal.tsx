@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -11,6 +11,7 @@ import {
   WifiOff,
   Wallet,
   Hash,
+  ChevronDown,
 } from "lucide-react";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
@@ -163,52 +164,8 @@ export function TradeTerminal() {
       </div>
 
       <div className="grid gap-3 lg:h-[calc(100%-4rem)] lg:grid-cols-[200px_1fr_346px]">
-        {/* Watchlist */}
-        <div className="card hidden min-h-0 flex-col overflow-hidden lg:flex">
-          <div className="border-b border-border px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted">
-            Markets
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {MARKETS.map((m) => {
-              const t = markets[m.symbol];
-              const chg =
-                t?.last != null && t?.open != null && t.open !== 0
-                  ? ((t.last - t.open) / t.open) * 100
-                  : 0;
-              const up = chg >= 0;
-              const active = m.symbol === symbol;
-              return (
-                <button
-                  key={m.symbol}
-                  onClick={() => setSymbol(m.symbol)}
-                  className={`flex w-full items-center justify-between gap-1.5 border-l-2 px-2.5 py-2 text-left transition ${
-                    active ? "border-brand bg-brand/10" : "border-transparent hover:bg-surface2"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className={`text-[13px] font-bold ${active ? "text-brand" : ""}`}>
-                      {m.short}
-                    </div>
-                    <div className="tabular text-[10px] text-muted">
-                      {t?.last != null ? t.last.toFixed(m.decimals) : "—"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Sparkline points={t?.points ?? []} up={up} width={40} height={20} />
-                    <span
-                      className={`tabular w-11 text-right text-[10px] font-semibold ${
-                        up ? "text-up" : "text-down"
-                      }`}
-                    >
-                      {up ? "+" : ""}
-                      {chg.toFixed(2)}%
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Watchlist (memoized — doesn't re-render on every price tick) */}
+        <Watchlist markets={markets} symbol={symbol} onSelect={setSymbol} />
 
         {/* Chart + digit strip */}
         <div className="flex min-h-0 flex-col gap-3">
@@ -216,7 +173,7 @@ export function TradeTerminal() {
             <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold">{market.name}</h2>
+                  <MarketDropdown symbol={symbol} onSelect={setSymbol} />
                   <ConnBadge connected={feed.connected} />
                 </div>
                 <div className="text-[11px] text-muted">
@@ -678,6 +635,99 @@ function DigitControls({
 }
 
 /* ---------------- Small pieces ---------------- */
+
+/* Memoized watchlist — only re-renders when market prices or the selection
+   change, NOT on every render of the terminal (keeps the chart smooth). */
+const Watchlist = memo(function Watchlist({
+  markets,
+  symbol,
+  onSelect,
+}: {
+  markets: Record<string, any>;
+  symbol: string;
+  onSelect: (s: string) => void;
+}) {
+  return (
+    <div className="card hidden min-h-0 flex-col overflow-hidden lg:flex">
+      <div className="border-b border-border px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted">
+        Markets
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {MARKETS.map((m) => {
+          const t = markets[m.symbol];
+          const chg =
+            t?.last != null && t?.open != null && t.open !== 0
+              ? ((t.last - t.open) / t.open) * 100
+              : 0;
+          const up = chg >= 0;
+          const active = m.symbol === symbol;
+          return (
+            <button
+              key={m.symbol}
+              onClick={() => onSelect(m.symbol)}
+              className={`flex w-full items-center justify-between gap-1.5 border-l-2 px-2.5 py-2 text-left transition ${
+                active ? "border-brand bg-brand/10" : "border-transparent hover:bg-surface2"
+              }`}
+            >
+              <div className="min-w-0">
+                <div className={`text-[13px] font-bold ${active ? "text-brand" : ""}`}>{m.short}</div>
+                <div className="tabular text-[10px] text-muted">
+                  {t?.last != null ? t.last.toFixed(m.decimals) : "—"}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Sparkline points={t?.points ?? []} up={up} width={40} height={20} />
+                <span className={`tabular w-11 text-right text-[10px] font-semibold ${up ? "text-up" : "text-down"}`}>
+                  {up ? "+" : ""}
+                  {chg.toFixed(2)}%
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+/* Symbol dropdown in the chart header (works on mobile where the watchlist is hidden). */
+function MarketDropdown({ symbol, onSelect }: { symbol: string; onSelect: (s: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const market = marketBySymbol(symbol)!;
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 rounded-lg px-1.5 py-0.5 text-base font-bold transition hover:bg-surface2"
+      >
+        {market.name}
+        <ChevronDown className={`h-4 w-4 text-muted transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-50 mt-1 max-h-72 w-64 overflow-y-auto rounded-xl border border-border bg-surface p-1 shadow-card">
+            {MARKETS.map((m) => (
+              <button
+                key={m.symbol}
+                onClick={() => {
+                  onSelect(m.symbol);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                  m.symbol === symbol ? "bg-brand/10 text-brand" : "hover:bg-surface2"
+                }`}
+              >
+                <span className="font-medium">{m.name}</span>
+                <span className="text-[10px] text-muted">{m.short}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function StatChip({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
