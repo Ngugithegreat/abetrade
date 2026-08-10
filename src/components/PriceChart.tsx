@@ -45,22 +45,25 @@ export function PriceChart({
   const last = data.length ? data[data.length - 1].price : null;
   const fmt = (v: number) => v.toFixed(decimals);
 
-  // Custom price tag pinned to the right axis at the current price.
+  // Current-price tag that rides the right-hand price scale, moving vertically
+  // with every tick (like a normal trading chart). Drawn in the axis gutter.
   const PriceTag = (props: any) => {
     const { viewBox } = props;
     if (!viewBox || last == null) return null;
     const y = viewBox.y;
-    const right = viewBox.x + viewBox.width;
-    const w = 62;
+    const plotRight = viewBox.x + viewBox.width; // right edge of the plot area
+    const w = 54; // sits in the price-scale gutter
     const label = fmt(last);
     return (
       <g>
-        <rect x={right - w} y={y - 11} width={w} height={22} rx={5} fill={color} />
+        {/* little pointer from the plot into the scale */}
+        <path d={`M ${plotRight} ${y} l 5 -5 l 0 10 z`} fill={color} />
+        <rect x={plotRight + 4} y={y - 10} width={w} height={20} rx={4} fill={color} />
         <text
-          x={right - w / 2}
+          x={plotRight + 4 + w / 2}
           y={y + 4}
           textAnchor="middle"
-          fontSize={11}
+          fontSize={10.5}
           fontWeight={700}
           fill="#06120f"
         >

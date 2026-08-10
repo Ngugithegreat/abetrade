@@ -20,13 +20,14 @@ const POLL_MS = 1000;
 /**
  * Live tick feed for `symbol` in the browser.
  *
- * The public Deriv app_id (1089) rejects tick *subscriptions*, but plain
- * `ticks_history` requests work fine — so we keep one socket open and poll the
- * latest ticks once a second, merging them into a rolling window.
+ * One request backfills recent history AND subscribes to every subsequent tick
+ * (`subscribe: 1`), so the chart moves in real time, tick for tick — matching
+ * other Deriv charts instead of lagging behind a once-a-second poll. If the
+ * gateway rejects the subscription or stops pushing, we fall back to polling.
  *
  * Each effect run owns its own socket + `closed` flag so React StrictMode's dev
  * double-mount can't cross wires between runs. A watchdog forces a reconnect if
- * the first history frame doesn't arrive quickly.
+ * no data arrives quickly.
  */
 export function useDerivFeed(symbol: string): FeedState {
   const [points, setPoints] = useState<Point[]>([]);
@@ -38,7 +39,9 @@ export function useDerivFeed(symbol: string): FeedState {
     let poll: ReturnType<typeof setInterval> | null = null;
     let retry: ReturnType<typeof setTimeout> | null = null;
     let watchdog: ReturnType<typeof setTimeout> | null = null;
+    let fallback: ReturnType<typeof setTimeout> | null = null;
     let gotData = false;
+    let tickSeen = false;
 
     setPoints([]);
     setConnected(false);
@@ -46,8 +49,10 @@ export function useDerivFeed(symbol: string): FeedState {
     const clearTimers = () => {
       if (poll) clearInterval(poll);
       if (watchdog) clearTimeout(watchdog);
+      if (fallback) clearTimeout(fallback);
       poll = null;
       watchdog = null;
+      fallback = null;
     };
 
     const requestLatest = (count: number) => {
@@ -55,6 +60,12 @@ export function useDerivFeed(symbol: string): FeedState {
       ws.send(
         JSON.stringify({ ticks_history: symbol, end: "latest", count, style: "ticks" })
       );
+    };
+
+    // Poll only if the live subscription isn't streaming.
+    const startPolling = () => {
+      if (poll || closed) return;
+      poll = setInterval(() => requestLatest(3), POLL_MS);
     };
 
     const merge = (incoming: Point[]) => {
@@ -73,14 +84,23 @@ export function useDerivFeed(symbol: string): FeedState {
     const connect = () => {
       if (closed) return;
       gotData = false;
+      tickSeen = false;
       const sock = new WebSocket(ENDPOINT);
       ws = sock;
 
       sock.onopen = () => {
         if (closed) return;
-        requestLatest(MAX_POINTS);
-        poll = setInterval(() => requestLatest(3), POLL_MS);
-        // If no data lands shortly, tear down and try again.
+        // Backfill history + subscribe to the live tick stream in one request.
+        sock.send(
+          JSON.stringify({
+            ticks_history: symbol,
+            end: "latest",
+            count: MAX_POINTS,
+            style: "ticks",
+            subscribe: 1,
+          })
+        );
+        // Reconnect if nothing at all arrives.
         watchdog = setTimeout(() => {
           if (!gotData && !closed) {
             try {
@@ -90,6 +110,10 @@ export function useDerivFeed(symbol: string): FeedState {
             }
           }
         }, 4000);
+        // If we get history but no live ticks, poll as a fallback.
+        fallback = setTimeout(() => {
+          if (!tickSeen && !closed) startPolling();
+        }, 3500);
       };
 
       sock.onmessage = (e) => {
@@ -100,7 +124,11 @@ export function useDerivFeed(symbol: string): FeedState {
         } catch {
           return;
         }
-        if (msg.error) return;
+        if (msg.error) {
+          // Subscription rejected — fall back to polling latest ticks.
+          startPolling();
+          return;
+        }
         if (msg.msg_type === "history" && msg.history) {
           const prices: number[] = msg.history.prices || [];
           const times: number[] = msg.history.times || [];
@@ -112,6 +140,16 @@ export function useDerivFeed(symbol: string): FeedState {
           }
           setConnected(true);
           merge(prices.map((p, i) => ({ epoch: Number(times[i]), price: Number(p) })));
+        } else if (msg.msg_type === "tick" && msg.tick) {
+          // Live tick pushed by the subscription — the real-time path.
+          tickSeen = true;
+          gotData = true;
+          if (watchdog) {
+            clearTimeout(watchdog);
+            watchdog = null;
+          }
+          setConnected(true);
+          merge([{ epoch: Number(msg.tick.epoch), price: Number(msg.tick.quote) }]);
         }
       };
 
