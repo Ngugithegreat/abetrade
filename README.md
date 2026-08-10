@@ -1,4 +1,4 @@
-# AbeTrade — Volatility Indices Trading Platform
+# SinTrades — Volatility Indices Trading Platform
 
 A professional, simple trading platform where users deposit funds, trade **Volatility Indices** live against Deriv's real price feed, and withdraw their winnings.
 

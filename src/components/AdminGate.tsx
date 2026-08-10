@@ -74,7 +74,7 @@ export function AdminGate() {
           <div className="mb-8 flex items-center justify-center gap-2">
             <Logo className="h-9 w-9" />
             <span className="text-2xl font-bold tracking-tight">
-              AbeTrade
+              SinTrades
               <span className="ml-1.5 rounded-md bg-brand/15 px-1.5 py-0.5 align-middle text-[11px] font-semibold text-brand">
                 ADMIN
               </span>
@@ -123,7 +123,7 @@ export function AdminGate() {
           <div className="flex items-center gap-2">
             <Logo className="h-7 w-7" />
             <span className="text-lg font-bold tracking-tight">
-              AbeTrade
+              SinTrades
               <span className="ml-1.5 rounded-md bg-brand/15 px-1.5 py-0.5 text-[11px] font-semibold text-brand">
                 ADMIN
               </span>

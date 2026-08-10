@@ -83,7 +83,7 @@ export async function POST(req: Request) {
         phone,
         amountKes,
         accountRef: `AT${session.id}`,
-        description: "AbeTrade deposit",
+        description: "SinTrades deposit",
         callbackUrl,
       });
       const rows = (await sql`

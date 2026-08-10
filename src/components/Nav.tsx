@@ -35,7 +35,7 @@ export function Nav() {
         <div className="flex items-center gap-6">
           <Link href="/trade" className="flex items-center gap-2">
             <Logo className="h-7 w-7" />
-            <span className="text-lg font-bold tracking-tight">AbeTrade</span>
+            <span className="text-lg font-bold tracking-tight">SinTrades</span>
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             {allLinks.map((l) => {

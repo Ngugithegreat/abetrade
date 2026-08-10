@@ -10,9 +10,18 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AbeTrade — Trade Volatility Indices",
+  metadataBase: new URL("https://www.sintrades.com"),
+  title: "SinTrades — Trade Volatility Indices",
   description:
     "Trade Volatility Indices live with instant deposits and withdrawals. Simple, fast, and built for everyone.",
+  openGraph: {
+    title: "SinTrades — Trade Volatility Indices",
+    description:
+      "Trade Volatility Indices live with instant deposits and withdrawals. Simple, fast, and built for everyone.",
+    url: "https://www.sintrades.com",
+    siteName: "SinTrades",
+    type: "website",
+  },
 };
 
 export default function RootLayout({

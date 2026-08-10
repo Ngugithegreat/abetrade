@@ -32,7 +32,7 @@ export async function createInvoice(opts: {
       price_amount: opts.amountUsd,
       price_currency: "usd",
       order_id: opts.orderId,
-      order_description: "AbeTrade deposit",
+      order_description: "SinTrades deposit",
       ipn_callback_url: opts.ipnUrl,
       success_url: opts.successUrl,
       cancel_url: opts.cancelUrl,

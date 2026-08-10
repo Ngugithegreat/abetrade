@@ -46,7 +46,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2">
           <Logo className="h-9 w-9" />
-          <span className="text-2xl font-bold tracking-tight">AbeTrade</span>
+          <span className="text-2xl font-bold tracking-tight">SinTrades</span>
         </Link>
 
         <div className="card p-6 sm:p-8">
@@ -116,7 +116,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </form>
 
           <p className="mt-5 text-center text-sm text-muted">
-            {isRegister ? "Already have an account? " : "New to AbeTrade? "}
+            {isRegister ? "Already have an account? " : "New to SinTrades? "}
             <Link
               href={isRegister ? "/login" : "/register"}
               className="font-medium text-brand hover:underline"

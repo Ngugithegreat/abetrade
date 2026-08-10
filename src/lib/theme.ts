@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 export type Theme = "light" | "dark";
 
 // Inline script (string) run before hydration to avoid a flash of the wrong theme.
-export const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('abetrade-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
+export const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('sintrades-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
 
 function subscribe(cb: () => void) {
   if (typeof window === "undefined") return () => {};
@@ -26,7 +26,7 @@ export function useTheme(): Theme {
 export function toggleTheme() {
   const isLight = document.documentElement.classList.toggle("light");
   try {
-    localStorage.setItem("abetrade-theme", isLight ? "light" : "dark");
+    localStorage.setItem("sintrades-theme", isLight ? "light" : "dark");
   } catch {
     /* ignore */
   }

@@ -83,7 +83,7 @@ export async function POST(req: Request) {
       const b2c = await b2cPayment({
         phone,
         amountKes,
-        remarks: "AbeTrade withdrawal",
+        remarks: "SinTrades withdrawal",
         resultUrl: `${cbBase}/api/mpesa/b2c-result${q}`,
         timeoutUrl: `${cbBase}/api/mpesa/b2c-timeout${q}`,
       });

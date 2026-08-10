@@ -52,8 +52,8 @@ async function call<T = any>(endpoint: string, body: unknown): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Accept: "application/json",
-    Referer: (process.env.PUBLIC_BASE_URL || "https://abetrade.vercel.app") + "/",
-    "User-Agent": "AbeTrade/1.0 (+https://abetrade.vercel.app)",
+    Referer: (process.env.PUBLIC_BASE_URL || "https://www.sintrades.com") + "/",
+    "User-Agent": "SinTrades/1.0 (+https://www.sintrades.com)",
   };
   if (process.env.COLLECTO_RELAY_SECRET) {
     headers["x-relay-secret"] = process.env.COLLECTO_RELAY_SECRET;
@@ -88,7 +88,7 @@ export async function requestToPay(opts: {
     phone: opts.phone,
     reference: opts.reference,
     gateway: opts.gateway,
-    reason: "AbeTrade deposit",
+    reason: "SinTrades deposit",
   });
 }
 
