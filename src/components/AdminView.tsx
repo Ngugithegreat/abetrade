@@ -12,6 +12,11 @@ import {
   TrendingUp,
   Landmark,
   Coins,
+  Percent,
+  Ban,
+  ShieldCheck,
+  Gift,
+  Megaphone,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { money, shortTime } from "@/lib/format";
@@ -26,6 +31,18 @@ type Pending = {
   email: string;
   user_name: string;
   created_at: string;
+};
+
+type Player = {
+  id: number;
+  name: string;
+  email: string;
+  account_no: string;
+  status: string;
+  promo: boolean;
+  balance: number;
+  pnl: number;
+  trades: number;
 };
 
 export function AdminView() {
@@ -49,15 +66,23 @@ export function AdminView() {
     load();
   }, [load]);
 
+  const post = useCallback(
+    async (payload: Record<string, unknown>) => {
+      const res = await fetch("/api/admin/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      await load();
+      return res;
+    },
+    [load]
+  );
+
   async function act(id: number, action: "approve" | "reject") {
     setBusyId(id);
     try {
-      await fetch("/api/admin/action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, action }),
-      });
-      await load();
+      await post({ id, action });
     } finally {
       setBusyId(null);
     }
@@ -69,6 +94,7 @@ export function AdminView() {
 
   const k = data.kpi;
   const pending: Pending[] = data.pending || [];
+  const players: Player[] = data.topUsers || [];
   const daily = (data.daily || []).map((d: any) => ({
     label: new Date(d.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     volume: d.volume / 100,
@@ -89,8 +115,8 @@ export function AdminView() {
         <Kpi icon={Activity} label="Trades" value={String(k.tradeCount)} sub={`${winRate}% player win`} />
       </div>
 
-      {/* Payment setup diagnostics */}
-      {data.setup && <SetupCard setup={data.setup} />}
+      {/* House edge control */}
+      <HouseEdgeCard edge={Number(data.houseEdge ?? 0.05)} onSave={(pct) => post({ action: "set_house_edge", percent: pct })} />
 
       {/* Volume chart */}
       <div className="card p-5">
@@ -158,32 +184,26 @@ export function AdminView() {
         )}
       </div>
 
-      {/* Top users by activity */}
+      {/* Player management */}
       <div className="card overflow-hidden">
-        <div className="border-b border-border px-5 py-3 font-bold">Players · by activity</div>
+        <div className="flex items-center justify-between border-b border-border px-5 py-3">
+          <span className="font-bold">Players &amp; accounts</span>
+          <span className="text-[11px] text-muted">Block abusers · grant promo credit · flag promo accounts</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted">
-                <th className="px-5 py-2 font-medium">Player</th>
+                <th className="px-5 py-2 font-medium">Account</th>
                 <th className="px-3 py-2 text-right font-medium">Balance</th>
                 <th className="px-3 py-2 text-right font-medium">Trades</th>
-                <th className="px-5 py-2 text-right font-medium">Player P&L</th>
+                <th className="px-3 py-2 text-right font-medium">Player P&amp;L</th>
+                <th className="px-5 py-2 text-right font-medium">Manage</th>
               </tr>
             </thead>
             <tbody>
-              {(data.topUsers || []).map((u: any) => (
-                <tr key={u.id} className="border-b border-border/60">
-                  <td className="px-5 py-2.5">
-                    <div className="font-medium">{u.name}</div>
-                    <div className="text-[11px] text-muted">{u.email}</div>
-                  </td>
-                  <td className="tabular px-3 py-2.5 text-right text-brand">{money(u.balance)}</td>
-                  <td className="tabular px-3 py-2.5 text-right">{u.trades}</td>
-                  <td className={`tabular px-5 py-2.5 text-right font-bold ${u.pnl >= 0 ? "text-up" : "text-down"}`}>
-                    {money(u.pnl, { sign: true })}
-                  </td>
-                </tr>
+              {players.map((u) => (
+                <PlayerRow key={u.id} u={u} onAction={post} />
               ))}
             </tbody>
           </table>
@@ -193,88 +213,143 @@ export function AdminView() {
   );
 }
 
-function SetupCard({ setup }: { setup: any }) {
-  const groups: { title: string; ready?: boolean; items: [string, boolean][] }[] = [
-    {
-      title: "M-Pesa deposits (Kenya)",
-      ready: setup.mpesa.deposits_ready,
-      items: [
-        ["MPESA_CONSUMER_KEY", setup.mpesa.MPESA_CONSUMER_KEY],
-        ["MPESA_CONSUMER_SECRET", setup.mpesa.MPESA_CONSUMER_SECRET],
-        ["MPESA_SHORTCODE", setup.mpesa.MPESA_SHORTCODE],
-        ["MPESA_PASSKEY", setup.mpesa.MPESA_PASSKEY],
-      ],
-    },
-    {
-      title: "M-Pesa withdrawals (B2C)",
-      items: [
-        ["MPESA_INITIATOR_NAME", setup.mpesa.MPESA_INITIATOR_NAME],
-        ["MPESA_SECURITY_CREDENTIAL", setup.mpesa.MPESA_SECURITY_CREDENTIAL],
-      ],
-    },
-    {
-      title: "Shared",
-      items: [
-        ["PUBLIC_BASE_URL", setup.shared.PUBLIC_BASE_URL],
-        ["MPESA_CALLBACK_SECRET", setup.shared.MPESA_CALLBACK_SECRET],
-      ],
-    },
-    { title: "Card & Bank (Paystack)", items: [["PAYSTACK_SECRET_KEY", setup.card_bank.PAYSTACK_SECRET_KEY]] },
-    {
-      title: "Crypto (NOWPayments)",
-      items: [
-        ["NOWPAYMENTS_API_KEY", setup.crypto.NOWPAYMENTS_API_KEY],
-        ["NOWPAYMENTS_IPN_SECRET", setup.crypto.NOWPAYMENTS_IPN_SECRET],
-      ],
-    },
-    {
-      title: "Uganda (Collecto)",
-      items: [
-        ["COLLECTO_USERNAME", setup.uganda.COLLECTO_USERNAME],
-        ["COLLECTO_BASE_URL", setup.uganda.COLLECTO_BASE_URL],
-        ["COLLECTO_RELAY_SECRET / API_KEY", setup.uganda.COLLECTO_RELAY_SECRET || setup.uganda.COLLECTO_API_KEY],
-      ],
-    },
-  ];
+function PlayerRow({
+  u,
+  onAction,
+}: {
+  u: Player;
+  onAction: (p: Record<string, unknown>) => Promise<Response>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const blocked = u.status === "blocked";
+
+  async function run(p: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      await onAction(p);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function grantBonus() {
+    const raw = window.prompt(`Grant promo credit to ${u.name} (${u.account_no}). Amount in USD (negative to remove):`, "10");
+    if (raw == null) return;
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount === 0) return;
+    run({ action: "grant_bonus", userId: u.id, amount });
+  }
+
+  return (
+    <tr className="border-b border-border/60">
+      <td className="px-5 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="font-medium">{u.name}</span>
+          {u.promo && (
+            <span className="rounded bg-brand/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-brand">Promo</span>
+          )}
+          {blocked && (
+            <span className="rounded bg-down/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-down">Blocked</span>
+          )}
+        </div>
+        <div className="tabular text-[11px] text-muted">{u.account_no} · {u.email}</div>
+      </td>
+      <td className="tabular px-3 py-2.5 text-right text-brand">{money(u.balance)}</td>
+      <td className="tabular px-3 py-2.5 text-right">{u.trades}</td>
+      <td className={`tabular px-3 py-2.5 text-right font-bold ${u.pnl >= 0 ? "text-up" : "text-down"}`}>
+        {money(u.pnl, { sign: true })}
+      </td>
+      <td className="px-5 py-2.5">
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            onClick={grantBonus}
+            disabled={busy}
+            title="Grant promo credit"
+            className="btn btn-ghost h-8 px-2 text-[11px]"
+          >
+            <Gift className="h-3.5 w-3.5 text-brand" /> Bonus
+          </button>
+          <button
+            onClick={() => run({ action: "toggle_promo", userId: u.id, value: !u.promo })}
+            disabled={busy}
+            title="Flag as promotional account"
+            className={`btn h-8 px-2 text-[11px] ${u.promo ? "btn-brand" : "btn-ghost"}`}
+          >
+            <Megaphone className="h-3.5 w-3.5" /> Promo
+          </button>
+          {blocked ? (
+            <button
+              onClick={() => run({ action: "unblock_user", userId: u.id })}
+              disabled={busy}
+              className="btn btn-ghost h-8 px-2 text-[11px] text-up"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> Unblock
+            </button>
+          ) : (
+            <button
+              onClick={() => run({ action: "block_user", userId: u.id })}
+              disabled={busy}
+              className="btn btn-ghost h-8 px-2 text-[11px] text-down"
+            >
+              <Ban className="h-3.5 w-3.5" /> Block
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) => Promise<Response> }) {
+  const [pct, setPct] = useState(String(Math.round(edge * 1000) / 10));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setPct(String(Math.round(edge * 1000) / 10));
+  }, [edge]);
+
+  async function save() {
+    const v = Number(pct);
+    if (!Number.isFinite(v) || v < 0 || v > 50) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onSave(v);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="card p-5">
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-bold">Payment setup</div>
-        <span
-          className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
-            setup.mpesa.deposits_ready && setup.mpesa.is_production
-              ? "bg-up/15 text-up"
-              : "bg-down/15 text-down"
-          }`}
-        >
-          M-Pesa {setup.mpesa.deposits_ready ? "keys ✓" : "OFF"} · MPESA_ENV=
-          {setup.mpesa.MPESA_ENV ?? "(not set → sandbox)"}
-          {setup.mpesa.is_production ? " · PRODUCTION" : " · SANDBOX"}
-        </span>
-      </div>
-      <p className="mb-3 text-[11px] leading-relaxed text-muted">
-        Green = the server can see this variable. Added a variable but it’s red? It isn’t in
-        this deployment — make sure it’s set for <b>Production</b> in Vercel, then redeploy.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {groups.map((g) => (
-          <div key={g.title} className="rounded-xl border border-border bg-white/[0.02] p-3">
-            <div className="mb-1.5 text-xs font-semibold">{g.title}</div>
-            <div className="space-y-1">
-              {g.items.map(([name, ok]) => (
-                <div key={name} className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="tabular text-muted">{name}</span>
-                  {ok ? (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-up" />
-                  ) : (
-                    <X className="h-3.5 w-3.5 shrink-0 text-down" />
-                  )}
-                </div>
-              ))}
-            </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <Percent className="h-4 w-4 text-brand" /> House earn (margin)
           </div>
-        ))}
+          <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
+            The edge baked into every payout. At {pct || 0}% the house keeps ~{pct || 0}% of all
+            volume over time. Rise/Fall pays {(2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}× — players
+            still see live payouts, so this is transparent, not rigged.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
+            <input
+              value={pct}
+              onChange={(e) => setPct(e.target.value.replace(/[^0-9.]/g, ""))}
+              inputMode="decimal"
+              className="tabular w-16 bg-transparent text-right text-lg font-bold outline-none"
+            />
+            <span className="ml-1 text-muted">%</span>
+          </div>
+          <button onClick={save} disabled={saving} className="btn btn-brand px-4 py-2.5 text-sm">
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );

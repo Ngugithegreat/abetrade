@@ -13,8 +13,10 @@ import {
   stopOutPrice,
   marketBySymbol,
   digitPayoutMult,
+  riseFallMult,
   DigitSubtype,
 } from "@/lib/markets";
+import { getHouseEdge, isBlocked } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -108,6 +110,20 @@ export async function POST(req: Request) {
   await ensureSchema();
   const sql = db();
 
+  if (await isBlocked(session.id)) {
+    return NextResponse.json(
+      { error: "Your account is suspended. Please contact support." },
+      { status: 403 }
+    );
+  }
+
+  // House edge is admin-tunable; it prices the payout for even-money and digit
+  // contracts. Applied at placement so the stored payout is authoritative.
+  const edge = await getHouseEdge();
+  if (kind === "digit") {
+    payoutMult = digitPayoutMult(subtype!, direction, barrier!, edge);
+  }
+
   // Entry tick. For DIGIT contracts the entry price is irrelevant to the outcome
   // (only the exit digit matters), so we trust a recent client-provided tick to
   // place instantly — no wait on the server's WebSocket. Rise/Fall & Multipliers
@@ -148,7 +164,7 @@ export async function POST(req: Request) {
 
   let rows: any[];
   if (kind === "rise_fall") {
-    const payout = Math.round(stake * PAYOUT_MULTIPLIER);
+    const payout = Math.round(stake * riseFallMult(edge));
     const expiry = entry.epoch + duration;
     rows = (await sql`
       INSERT INTO abetrade_trades

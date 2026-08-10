@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { isProduction, mpesaEnvValue } from "@/lib/mpesa";
+import { getHouseEdge } from "@/lib/settings";
+import { accountNo } from "@/lib/format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,18 +44,19 @@ export async function GET() {
       GROUP BY 1 ORDER BY 1
     ` as Promise<any[]>,
     sql`
-      SELECT u.id, u.name, u.email, u.balance,
+      SELECT u.id, u.name, u.email, u.balance, u.status, u.promo, u.created_at,
         COALESCE(SUM(CASE WHEN t.status='won' THEN t.payout - t.stake
                           WHEN t.status='lost' THEN -t.stake ELSE 0 END),0) AS pnl,
         COUNT(t.id) FILTER (WHERE t.status != 'open') AS trades
       FROM abetrade_users u
       LEFT JOIN abetrade_trades t ON t.user_id = u.id
       GROUP BY u.id
-      ORDER BY trades DESC NULLS LAST
-      LIMIT 12
+      ORDER BY trades DESC NULLS LAST, u.created_at DESC
+      LIMIT 40
     ` as Promise<any[]>,
   ]);
 
+  const houseEdge = await getHouseEdge();
   const k = kpi[0] || {};
   const num = (v: any) => Number(v ?? 0);
 
@@ -76,44 +78,15 @@ export async function GET() {
       houseProfit: num(k.staked_total) - num(k.payout_total),
     },
     daily: daily.map((d) => ({ day: d.day, volume: num(d.volume) })),
+    houseEdge, // fraction, e.g. 0.05
     topUsers: topUsers.map((u) => ({
       ...u,
+      account_no: accountNo(u.id),
+      status: u.status || "active",
+      promo: !!u.promo,
       balance: num(u.balance),
       pnl: num(u.pnl),
       trades: num(u.trades),
     })),
-    // Payment setup diagnostics — booleans only, NEVER the secret values.
-    setup: {
-      mpesa: {
-        MPESA_CONSUMER_KEY: !!process.env.MPESA_CONSUMER_KEY,
-        MPESA_CONSUMER_SECRET: !!process.env.MPESA_CONSUMER_SECRET,
-        MPESA_SHORTCODE: !!process.env.MPESA_SHORTCODE,
-        MPESA_PASSKEY: !!process.env.MPESA_PASSKEY,
-        MPESA_ENV: mpesaEnvValue() || null,
-        is_production: isProduction(),
-        deposits_ready:
-          !!process.env.MPESA_CONSUMER_KEY &&
-          !!process.env.MPESA_CONSUMER_SECRET &&
-          !!process.env.MPESA_SHORTCODE &&
-          !!process.env.MPESA_PASSKEY,
-        MPESA_INITIATOR_NAME: !!process.env.MPESA_INITIATOR_NAME,
-        MPESA_SECURITY_CREDENTIAL: !!process.env.MPESA_SECURITY_CREDENTIAL,
-      },
-      shared: {
-        PUBLIC_BASE_URL: !!(process.env.PUBLIC_BASE_URL || process.env.MPESA_CALLBACK_BASE_URL),
-        MPESA_CALLBACK_SECRET: !!process.env.MPESA_CALLBACK_SECRET,
-      },
-      card_bank: { PAYSTACK_SECRET_KEY: !!process.env.PAYSTACK_SECRET_KEY },
-      crypto: {
-        NOWPAYMENTS_API_KEY: !!process.env.NOWPAYMENTS_API_KEY,
-        NOWPAYMENTS_IPN_SECRET: !!process.env.NOWPAYMENTS_IPN_SECRET,
-      },
-      uganda: {
-        COLLECTO_USERNAME: !!process.env.COLLECTO_USERNAME,
-        COLLECTO_BASE_URL: !!process.env.COLLECTO_BASE_URL,
-        COLLECTO_RELAY_SECRET: !!process.env.COLLECTO_RELAY_SECRET,
-        COLLECTO_API_KEY: !!process.env.COLLECTO_API_KEY,
-      },
-    },
   });
 }

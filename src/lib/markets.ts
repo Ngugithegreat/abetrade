@@ -89,9 +89,14 @@ export const DEFAULT_DIGIT_TICKS = 1;
 export type DigitSubtype = "even_odd" | "over_under" | "matches_differs";
 
 /** Fair multiplier for a given win probability, minus the house edge. */
-export function payoutFromProb(prob: number): number {
-  const m = (1 / prob) * (1 - DIGIT_HOUSE_EDGE);
+export function payoutFromProb(prob: number, edge: number = DIGIT_HOUSE_EDGE): number {
+  const m = (1 / prob) * (1 - edge);
   return Math.round(m * 100) / 100;
+}
+
+/** Rise/Fall (even-money) multiplier for a given house edge. 5% edge -> 1.9x. */
+export function riseFallMult(edge: number = DIGIT_HOUSE_EDGE): number {
+  return Math.round(2 * (1 - edge) * 100) / 100;
 }
 
 /**
@@ -116,9 +121,10 @@ export function digitProb(
 export function digitPayoutMult(
   subtype: DigitSubtype,
   prediction: string,
-  barrier: number
+  barrier: number,
+  edge: number = DIGIT_HOUSE_EDGE
 ): number {
-  return payoutFromProb(digitProb(subtype, prediction, barrier));
+  return payoutFromProb(digitProb(subtype, prediction, barrier), edge);
 }
 
 /** Did a digit prediction win, given the exit last digit? */

@@ -111,6 +111,19 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS barrier INTEGER`;
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS exit_digit INTEGER`;
 
+  // Account controls: status (active | blocked) + promotional flag (admin-only).
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS promo BOOLEAN NOT NULL DEFAULT false`;
+
+  // Key/value settings store (house edge %, etc.).
+  await sql`
+    CREATE TABLE IF NOT EXISTS abetrade_settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON abetrade_transactions(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON abetrade_trades(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON abetrade_transactions(provider_ref)`;

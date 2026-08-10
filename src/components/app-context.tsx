@@ -49,6 +49,8 @@ export type AppUser = {
   role: "user" | "admin";
   balance: number;
   country: string | null;
+  account_no?: string;
+  status?: string;
 };
 
 export type AppConfig = {

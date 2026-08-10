@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { isBlocked } from "@/lib/settings";
 import { cents } from "@/lib/format";
 import {
   isB2cConfigured,
@@ -59,6 +60,13 @@ export async function POST(req: Request) {
 
   await ensureSchema();
   const sql = db();
+
+  if (await isBlocked(session.id)) {
+    return NextResponse.json(
+      { error: "Your account is suspended. Please contact support." },
+      { status: 403 }
+    );
+  }
 
   // Reserve funds atomically.
   const debit = (await sql`

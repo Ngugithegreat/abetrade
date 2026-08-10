@@ -1,0 +1,39 @@
+import { db, ensureSchema } from "@/lib/db";
+
+// Runtime, admin-tunable settings kept in the abetrade_settings key/value table.
+
+export const DEFAULT_HOUSE_EDGE = 0.05; // 5%
+const HOUSE_EDGE_KEY = "house_edge";
+
+/** The current house edge as a fraction (0.05 = 5%). Falls back to the default. */
+export async function getHouseEdge(): Promise<number> {
+  await ensureSchema();
+  const sql = db();
+  const rows = (await sql`
+    SELECT value FROM abetrade_settings WHERE key = ${HOUSE_EDGE_KEY} LIMIT 1
+  `) as Array<{ value: string }>;
+  const v = rows.length ? Number(rows[0].value) : NaN;
+  return Number.isFinite(v) && v >= 0 && v <= 0.5 ? v : DEFAULT_HOUSE_EDGE;
+}
+
+/** Set the house edge (fraction). Clamped to a sane 0–50% range. */
+export async function setHouseEdge(edge: number): Promise<number> {
+  await ensureSchema();
+  const sql = db();
+  const clamped = Math.min(0.5, Math.max(0, Number(edge) || 0));
+  await sql`
+    INSERT INTO abetrade_settings (key, value, updated_at)
+    VALUES (${HOUSE_EDGE_KEY}, ${String(clamped)}, now())
+    ON CONFLICT (key) DO UPDATE SET value = ${String(clamped)}, updated_at = now()
+  `;
+  return clamped;
+}
+
+/** True if the account is blocked/suspended and must not trade or withdraw. */
+export async function isBlocked(userId: number): Promise<boolean> {
+  const sql = db();
+  const rows = (await sql`
+    SELECT status FROM abetrade_users WHERE id = ${userId} LIMIT 1
+  `) as Array<{ status: string | null }>;
+  return rows.length ? rows[0].status === "blocked" : false;
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { accountNo } from "@/lib/format";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
 import { isPaystackConfigured } from "@/lib/paystack";
@@ -29,7 +30,7 @@ export async function GET() {
 
   const sql = db();
   const [userRows, txns, openTrades, closedTrades] = await Promise.all([
-    sql`SELECT id, name, email, role, balance, country FROM abetrade_users WHERE id = ${session.id}` as Promise<any[]>,
+    sql`SELECT id, name, email, role, balance, country, status FROM abetrade_users WHERE id = ${session.id}` as Promise<any[]>,
     sql`SELECT * FROM abetrade_transactions WHERE user_id = ${session.id} ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status = 'open' ORDER BY created_at DESC` as Promise<any[]>,
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status != 'open' ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
@@ -37,7 +38,7 @@ export async function GET() {
 
   const u = userRows[0];
   return NextResponse.json({
-    user: u ? { ...u, balance: Number(u.balance) } : null,
+    user: u ? { ...u, balance: Number(u.balance), account_no: accountNo(u.id) } : null,
     transactions: txns,
     openTrades,
     closedTrades,

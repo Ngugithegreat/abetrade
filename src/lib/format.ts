@@ -20,6 +20,11 @@ export function money(c: number, opts: { sign?: boolean } = {}): string {
   return s;
 }
 
+/** Public-facing account number derived from the user id, e.g. ST-100482. */
+export function accountNo(id: number): string {
+  return "ST-" + String(100000 + Number(id));
+}
+
 export function shortTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("en-US", {

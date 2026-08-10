@@ -24,7 +24,7 @@ const links = [
 
 export function Nav() {
   const pathname = usePathname();
-  const { balance, logout, loading } = useApp();
+  const { balance, logout, loading, user } = useApp();
   const [open, setOpen] = useState(false);
 
   const allLinks = links;
@@ -60,6 +60,15 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-3">
+          {user?.account_no && (
+            <div className="hidden items-center gap-1.5 rounded-lg border border-up/30 bg-up/10 px-2.5 py-1.5 lg:flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-up" />
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-up">
+                Live account
+              </span>
+              <span className="tabular text-[10px] text-muted">{user.account_no}</span>
+            </div>
+          )}
           <div className="hidden text-right sm:block">
             <div className="text-[10px] uppercase tracking-wider text-muted">
               Balance
@@ -98,6 +107,14 @@ export function Nav() {
               <span className="text-xs uppercase text-muted">Balance</span>
               <span className="tabular font-bold text-brand">{money(balance)}</span>
             </div>
+            {user?.account_no && (
+              <div className="flex items-center justify-between px-2 pb-2">
+                <span className="flex items-center gap-1.5 text-xs text-up">
+                  <span className="h-1.5 w-1.5 rounded-full bg-up" /> Live account
+                </span>
+                <span className="tabular text-xs text-muted">{user.account_no}</span>
+              </div>
+            )}
             {allLinks.map((l) => {
               const Icon = l.icon;
               return (

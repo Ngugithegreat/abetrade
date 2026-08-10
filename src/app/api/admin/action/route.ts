@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
+import { setHouseEdge } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Approve or reject a pending deposit/withdrawal.
+// Admin actions: approve/reject pending money requests, plus account &
+// house-edge controls.
 export async function POST(req: Request) {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
@@ -17,14 +19,69 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
-  const id = Number(body.id);
-  const action = String(body.action);
-  if (!Number.isFinite(id) || (action !== "approve" && action !== "reject")) {
-    return NextResponse.json({ error: "Bad request." }, { status: 400 });
-  }
+  const action = String(body.action || "");
 
   await ensureSchema();
   const sql = db();
+
+  // ---- House edge (percent, e.g. 5 => 0.05) ----
+  if (action === "set_house_edge") {
+    const pct = Number(body.percent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 50) {
+      return NextResponse.json({ error: "Edge must be between 0 and 50%." }, { status: 400 });
+    }
+    const edge = await setHouseEdge(pct / 100);
+    return NextResponse.json({ ok: true, houseEdge: edge });
+  }
+
+  // ---- Account controls ----
+  if (action === "block_user" || action === "unblock_user") {
+    const userId = Number(body.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: "Bad user." }, { status: 400 });
+    }
+    const status = action === "block_user" ? "blocked" : "active";
+    await sql`UPDATE abetrade_users SET status = ${status} WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true, status });
+  }
+
+  if (action === "toggle_promo") {
+    const userId = Number(body.userId);
+    const value = !!body.value;
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: "Bad user." }, { status: 400 });
+    }
+    await sql`UPDATE abetrade_users SET promo = ${value} WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true, promo: value });
+  }
+
+  if (action === "grant_bonus") {
+    const userId = Number(body.userId);
+    const usd = Number(body.amount);
+    if (!Number.isFinite(userId) || !Number.isFinite(usd) || usd === 0 || Math.abs(usd) > 100000) {
+      return NextResponse.json({ error: "Enter a valid bonus amount." }, { status: 400 });
+    }
+    const amount = Math.round(usd * 100); // cents; can be negative to claw back
+    const rows = (await sql`
+      UPDATE abetrade_users SET balance = balance + ${amount}
+      WHERE id = ${userId} AND balance + ${amount} >= 0
+      RETURNING balance
+    `) as Array<{ balance: string | number }>;
+    if (!rows.length) {
+      return NextResponse.json({ error: "User not found or balance would go negative." }, { status: 400 });
+    }
+    await sql`
+      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
+      VALUES (${userId}, 'bonus', ${amount}, 'completed', 'promo', 'Promotional credit')
+    `;
+    return NextResponse.json({ ok: true, balance: Number(rows[0].balance) });
+  }
+
+  // ---- Approve / reject a pending deposit or withdrawal ----
+  const id = Number(body.id);
+  if (!Number.isFinite(id) || (action !== "approve" && action !== "reject")) {
+    return NextResponse.json({ error: "Bad request." }, { status: 400 });
+  }
 
   // Claim the pending row atomically so it can't be actioned twice.
   const newStatus = action === "approve" ? "completed" : "rejected";
