@@ -111,6 +111,38 @@ export function welcomeEmail(name: string): { subject: string; html: string; tex
   return { subject: "Welcome to SinTrades 🎉", html, text };
 }
 
+export function depositReceiptEmail(
+  name: string,
+  usd: number,
+  method: string
+): { subject: string; html: string; text: string } {
+  const first = (name || "there").split(" ")[0];
+  const amt = `$${usd.toFixed(2)}`;
+  const url = `${siteUrl()}/trade`;
+  const html = shell(
+    `<h1 style="margin:0 0 12px;color:#ffffff;font-size:22px;">Deposit confirmed ✅</h1>
+     <p style="margin:0 0 16px;">Hi ${first}, we've credited <b style="color:#00E39A;">${amt}</b> to your SinTrades balance via ${method}. It's ready to trade.</p>
+     <p style="margin:0 0 22px;">${button("Go to the terminal", url)}</p>
+     <p style="margin:0;color:#9aa1b1;font-size:13px;">If this wasn't you, contact support immediately.</p>`
+  );
+  return { subject: `Deposit confirmed — ${amt}`, html, text: `Your SinTrades deposit of ${amt} via ${method} is confirmed and ready to trade.` };
+}
+
+export function withdrawalReceiptEmail(
+  name: string,
+  usd: number,
+  destination: string
+): { subject: string; html: string; text: string } {
+  const first = (name || "there").split(" ")[0];
+  const amt = `$${usd.toFixed(2)}`;
+  const html = shell(
+    `<h1 style="margin:0 0 12px;color:#ffffff;font-size:22px;">Withdrawal request received</h1>
+     <p style="margin:0 0 16px;">Hi ${first}, we've received your request to withdraw <b>${amt}</b> to <b>${destination}</b>. We're processing it now — most withdrawals complete within minutes.</p>
+     <p style="margin:0;color:#9aa1b1;font-size:13px;">You'll get another note once it's sent. Didn't request this? Contact support right away.</p>`
+  );
+  return { subject: `Withdrawal request received — ${amt}`, html, text: `We received your SinTrades withdrawal request of ${amt} to ${destination}. Processing now.` };
+}
+
 export function resetPasswordEmail(name: string, link: string): { subject: string; html: string; text: string } {
   const first = (name || "there").split(" ")[0];
   const html = shell(

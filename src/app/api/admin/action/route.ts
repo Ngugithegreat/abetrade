@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { setHouseEdge } from "@/lib/settings";
+import { sendEmail, depositReceiptEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -103,6 +104,16 @@ export async function POST(req: Request) {
   if (tx.type === "deposit" && action === "approve") {
     // Credit the user now.
     await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${tx.user_id}`;
+    // Email receipt (fire-and-forget).
+    void (async () => {
+      try {
+        const u = (await sql`SELECT email, name FROM abetrade_users WHERE id = ${tx.user_id} LIMIT 1`) as Array<{ email: string; name: string }>;
+        if (u.length && u[0].email) {
+          const mail = depositReceiptEmail(u[0].name, amount / 100, tx.method || "your payment method");
+          await sendEmail({ to: u[0].email, subject: mail.subject, html: mail.html, text: mail.text });
+        }
+      } catch { /* non-fatal */ }
+    })();
   } else if (tx.type === "withdrawal" && action === "reject") {
     // Refund the reserved funds (amount is negative, so subtract to add back).
     await sql`UPDATE abetrade_users SET balance = balance - ${amount} WHERE id = ${tx.user_id}`;

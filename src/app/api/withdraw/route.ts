@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { isBlocked } from "@/lib/settings";
+import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
 import {
   isB2cConfigured,
@@ -105,6 +106,10 @@ export async function POST(req: Request) {
         RETURNING *
       `) as any[];
 
+      {
+        const mail = withdrawalReceiptEmail(session.name, amount / 100, phone);
+        void sendEmail({ to: session.email, subject: mail.subject, html: mail.html, text: mail.text }).catch(() => {});
+      }
       return NextResponse.json({
         ok: true,
         mpesa: true,
@@ -130,6 +135,10 @@ export async function POST(req: Request) {
     RETURNING *
   `) as any[];
 
+  {
+    const mail = withdrawalReceiptEmail(session.name, amount / 100, rawRef);
+    void sendEmail({ to: session.email, subject: mail.subject, html: mail.html, text: mail.text }).catch(() => {});
+  }
   return NextResponse.json({
     ok: true,
     transaction: rows[0],

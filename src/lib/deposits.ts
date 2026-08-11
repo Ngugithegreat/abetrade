@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { sendEmail, depositReceiptEmail } from "./email";
 
 // Shared, idempotent crediting for automated deposits. Every provider webhook
 // funnels through here: it finds the PENDING deposit by its provider reference,
@@ -51,6 +52,24 @@ export async function creditPendingDeposit(
   if (!claimed.length) return { ok: false, reason: "race" };
 
   await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${tx.user_id}`;
+
+  // Email receipt — fire-and-forget so crediting never depends on email.
+  void (async () => {
+    try {
+      const u = (await sql`
+        SELECT u.email, u.name, t.method
+        FROM abetrade_users u JOIN abetrade_transactions t ON t.id = ${tx.id}
+        WHERE u.id = ${tx.user_id} LIMIT 1
+      `) as Array<{ email: string; name: string; method: string | null }>;
+      if (u.length && u[0].email) {
+        const mail = depositReceiptEmail(u[0].name, amount / 100, u[0].method || "your payment method");
+        await sendEmail({ to: u[0].email, subject: mail.subject, html: mail.html, text: mail.text });
+      }
+    } catch {
+      /* non-fatal */
+    }
+  })();
+
   return { ok: true, credited: amount };
 }
 
