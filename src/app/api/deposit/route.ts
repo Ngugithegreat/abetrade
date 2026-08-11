@@ -17,7 +17,8 @@ import {
   initTransaction,
   paystackAmountSubunit,
 } from "@/lib/paystack";
-import { isCryptoConfigured, createInvoice } from "@/lib/crypto-pay";
+import QRCode from "qrcode";
+import { isCryptoConfigured, createPayment, isSupportedCoin } from "@/lib/crypto-pay";
 import {
   isCollectoConfigured,
   normalizeUgPhone,
@@ -142,27 +143,45 @@ export async function POST(req: Request) {
 
   // ---------- Crypto (NOWPayments invoice) ----------
   if (method === "crypto" && isCryptoConfigured()) {
+    const coin = isSupportedCoin(String(body.coin || "")) ? String(body.coin) : "usdttrc20";
     try {
       const orderId = `atc_${session.id}_${randomUUID().slice(0, 12)}`;
       const token = callbackToken();
-      const invoice = await createInvoice({
+      const payment = await createPayment({
         amountUsd: usd,
         orderId,
+        payCurrency: coin,
         ipnUrl: `${base}/api/crypto/webhook${token ? `?token=${encodeURIComponent(token)}` : ""}`,
-        successUrl: `${base}/wallet?deposit=processing`,
-        cancelUrl: `${base}/wallet`,
       });
       await sql`
         INSERT INTO abetrade_transactions
-          (user_id, type, amount, status, method, provider_ref, note)
+          (user_id, type, amount, status, method, provider_ref, reference, note)
         VALUES
           (${session.id}, 'deposit', ${amount}, 'pending', 'crypto', ${orderId},
-           'Awaiting crypto payment')
+           ${payment.payAddress}, ${"Awaiting " + payment.payCurrency.toUpperCase() + " payment"})
       `;
-      return NextResponse.json({ ok: true, redirect: true, redirectUrl: invoice.invoice_url });
+      // QR of the address so users can scan-to-pay (generated locally, no third party).
+      let qr: string | null = null;
+      try {
+        qr = await QRCode.toDataURL(payment.payAddress, { margin: 1, width: 220 });
+      } catch {
+        /* QR is optional */
+      }
+      return NextResponse.json({
+        ok: true,
+        crypto: {
+          paymentId: payment.paymentId,
+          address: payment.payAddress,
+          amount: payment.payAmount,
+          currency: payment.payCurrency,
+          network: payment.network,
+          usd,
+          qr,
+        },
+      });
     } catch (e: any) {
       return NextResponse.json(
-        { error: e?.message || "Could not start the crypto payment." },
+        { error: e?.message || "Could not create the crypto payment." },
         { status: 502 }
       );
     }

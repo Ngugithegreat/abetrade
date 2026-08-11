@@ -161,6 +161,99 @@ export function WalletView() {
   );
 }
 
+function CryptoDepositPanel({
+  data,
+  status,
+  onReset,
+}: {
+  data: { address: string; amount: number; currency: string; network: string | null; usd: number; qr: string | null };
+  status: "waiting" | "confirming" | "done" | "failed";
+  onReset: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  async function copyAddr() {
+    try {
+      await navigator.clipboard.writeText(data.address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* select manually */
+    }
+  }
+
+  if (status === "done") {
+    return (
+      <div className="flex flex-col items-center py-6 text-center">
+        <CheckCircle2 className="h-12 w-12 text-up" />
+        <div className="mt-3 text-lg font-bold">Payment received</div>
+        <div className="mt-1 text-sm text-muted">
+          ${data.usd.toFixed(2)} has been credited to your balance.
+        </div>
+        <button onClick={onReset} className="btn btn-brand mt-5 px-5 py-2.5">
+          Make another deposit
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-sm font-bold">Send crypto to complete your deposit</div>
+      <p className="text-xs text-muted">
+        Send <b className="text-fg">exactly {data.amount} {data.currency.toUpperCase()}</b>
+        {data.network ? ` on the ${data.network.toUpperCase()} network` : ""} to the address below.
+        Your balance is credited automatically once the network confirms.
+      </p>
+
+      {data.qr && (
+        <div className="flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={data.qr} alt="Deposit address QR" className="rounded-xl border border-border bg-white p-1" width={180} height={180} />
+        </div>
+      )}
+
+      <div>
+        <label className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+          {data.currency.toUpperCase()} address
+        </label>
+        <div className="flex gap-2">
+          <div className="tabular flex-1 break-all rounded-xl border border-border bg-surface2 px-3 py-2.5 text-xs">
+            {data.address}
+          </div>
+          <button onClick={copyAddr} className="btn btn-brand shrink-0 px-3 py-2.5 text-sm">
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div
+        className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm ${
+          status === "failed" ? "border-down/40 text-down" : "border-brand/40 text-fg"
+        }`}
+      >
+        {status === "failed" ? (
+          <>
+            <XCircle className="h-4 w-4 text-down" /> Payment failed or expired. Start a new deposit.
+          </>
+        ) : (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin text-brand" />
+            {status === "confirming" ? "Payment detected — confirming on-chain…" : "Waiting for your payment…"}
+          </>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-gold/30 bg-gold/5 px-3 py-2 text-[11px] text-muted">
+        Send only <b>{data.currency.toUpperCase()}</b> to this address. Sending a different coin or network may lose your funds.
+      </div>
+
+      <button onClick={onReset} className="btn btn-ghost w-full py-2.5 text-sm">
+        {status === "failed" ? "Start over" : "Cancel"}
+      </button>
+    </div>
+  );
+}
+
 function ReferralCard({ referral }: { referral: Referral }) {
   const [copied, setCopied] = useState(false);
   // Start with the relative path (matches on server + first client render),
@@ -218,6 +311,17 @@ function ReferralCard({ referral }: { referral: Referral }) {
   );
 }
 
+// Coins users can pay in (kept in the client so we avoid importing the
+// server-only crypto lib). Mirrors CRYPTO_COINS in src/lib/crypto-pay.ts.
+const CRYPTO_COINS = [
+  { code: "usdttrc20", label: "USDT", note: "TRC20" },
+  { code: "usdterc20", label: "USDT", note: "ERC20" },
+  { code: "btc", label: "Bitcoin", note: "BTC" },
+  { code: "eth", label: "Ethereum", note: "ETH" },
+  { code: "trx", label: "TRON", note: "TRX" },
+  { code: "bnbbsc", label: "BNB", note: "BSC" },
+];
+
 function MoneyForm({
   kind,
   max,
@@ -242,6 +346,9 @@ function MoneyForm({
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState(methods[0]?.id ?? "card");
   const [reference, setReference] = useState("");
+  const [coin, setCoin] = useState("usdttrc20");
+  const [cryptoPay, setCryptoPay] = useState<any | null>(null);
+  const [cryptoStatus, setCryptoStatus] = useState<"waiting" | "confirming" | "done" | "failed">("waiting");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -297,6 +404,42 @@ function MoneyForm({
     }, 4000);
   }
 
+  // Poll NOWPayments status until the on-chain payment confirms, then credit.
+  function pollCrypto(paymentId: string) {
+    let n = 0;
+    const id = setInterval(async () => {
+      n += 1;
+      try {
+        const res = await fetch(`/api/crypto/status?paymentId=${encodeURIComponent(paymentId)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        if (json.credited) {
+          clearInterval(id);
+          setCryptoStatus("done");
+          if (typeof json.balance === "number") onDone(json.balance);
+          refresh();
+        } else if (json.status === "confirming" || json.status === "sending") {
+          setCryptoStatus("confirming");
+        } else if (["failed", "expired", "refunded"].includes(json.status)) {
+          clearInterval(id);
+          setCryptoStatus("failed");
+        }
+      } catch {
+        /* keep polling */
+      }
+      if (n >= 150) clearInterval(id); // ~15 min
+    }, 6000);
+  }
+
+  function resetCrypto() {
+    setCryptoPay(null);
+    setCryptoStatus("waiting");
+    setAmount("");
+    setMsg(null);
+    refresh();
+  }
+
   async function submit() {
     setMsg(null);
     const minUsd = kind === "deposit" ? 5 : 1;
@@ -313,11 +456,16 @@ function MoneyForm({
       const res = await fetch(`/api/${kind}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: amountNum, method, reference }),
+        body: JSON.stringify({ amount: amountNum, method, reference, coin }),
       });
       const json = await res.json();
       if (!res.ok) {
         setMsg({ text: json.error || "Request failed.", ok: false });
+      } else if (json.crypto) {
+        // Crypto: show the deposit address and poll until it confirms on-chain.
+        setCryptoPay(json.crypto);
+        setCryptoStatus("waiting");
+        pollCrypto(json.crypto.paymentId);
       } else if (json.redirect && json.redirectUrl) {
         // Hand off to the hosted checkout (card / bank / crypto).
         setMsg({ text: "Redirecting to secure checkout…", ok: true });
@@ -345,6 +493,10 @@ function MoneyForm({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (cryptoPay) {
+    return <CryptoDepositPanel data={cryptoPay} status={cryptoStatus} onReset={resetCrypto} />;
   }
 
   return (
@@ -381,6 +533,24 @@ function MoneyForm({
           })}
         </div>
       </div>
+
+      {kind === "deposit" && method === "crypto" && gatewayReady && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">Pay with</label>
+          <div className="grid grid-cols-3 gap-2">
+            {CRYPTO_COINS.map((c) => (
+              <button
+                key={c.code}
+                onClick={() => setCoin(c.code)}
+                className={`btn flex-col gap-0 py-2 text-[11px] ${coin === c.code ? "btn-brand" : "btn-ghost"}`}
+              >
+                <span className="font-bold">{c.label}</span>
+                <span className="text-[9px] opacity-80">{c.note}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {showReference && (
         <div>
@@ -423,7 +593,7 @@ function MoneyForm({
         {busy
           ? "Submitting…"
           : isHostedDeposit && method === "crypto"
-          ? "Pay with Crypto"
+          ? "Get deposit address"
           : isHostedDeposit && method === "bank"
           ? "Continue to Bank"
           : isHostedDeposit

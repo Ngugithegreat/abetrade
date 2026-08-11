@@ -16,15 +16,17 @@ import { useTheme } from "@/lib/theme";
 // How many recent ticks to show — a tighter window zooms in on the price action.
 const VISIBLE = 90;
 
+export type ChartMarker = { price: number; color: string; label: string };
+
 export function PriceChart({
   points,
   up,
-  entryPrice,
+  markers = [],
   decimals = 2,
 }: {
   points: Point[];
   up: boolean;
-  entryPrice?: number | null;
+  markers?: ChartMarker[];
   decimals?: number;
 }) {
   const theme = useTheme();
@@ -139,20 +141,21 @@ export function PriceChart({
             }
             formatter={(v: any) => [fmt(Number(v)), "Price"]}
           />
-          {entryPrice ? (
+          {markers.map((mk, i) => (
             <ReferenceLine
-              y={entryPrice}
-              stroke="#FFB020"
+              key={`${mk.price}-${i}`}
+              y={mk.price}
+              stroke={mk.color}
               strokeDasharray="5 4"
               strokeWidth={1.25}
               label={{
-                value: `entry ${fmt(entryPrice)}`,
+                value: mk.label,
                 position: "insideLeft",
-                fill: "#FFB020",
+                fill: mk.color,
                 fontSize: 10,
               }}
             />
-          ) : null}
+          ))}
           {last != null && (
             <ReferenceLine y={last} stroke={color} strokeDasharray="4 4" strokeWidth={1} label={<PriceTag />} />
           )}

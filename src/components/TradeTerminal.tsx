@@ -21,6 +21,7 @@ import { PriceChart } from "./PriceChart";
 import { DigitHeatmap } from "./DigitHeatmap";
 import { BotPanel } from "./BotPanel";
 import { AiScanner, Signal } from "./AiScanner";
+import { Onboarding } from "./Onboarding";
 import {
   MARKETS,
   DURATIONS,
@@ -82,6 +83,25 @@ export function TradeTerminal() {
   const wins = closed.filter((t) => t.status === "won").length;
   const settled = closed.filter((t) => t.status !== "open").length;
   const winRate = settled ? Math.round((wins / settled) * 100) : 0;
+
+  // Draw open Rise/Fall & Multiplier positions on the chart (entry + stop-out lines).
+  const chartMarkers = openTrades
+    .filter((t) => t.symbol === symbol && (t.kind === "rise_fall" || t.kind === "mult"))
+    .flatMap((t) => {
+      const up = t.direction === "rise" || t.direction === "up";
+      const color = up ? "#00E39A" : "#FF4D6D";
+      const label =
+        t.kind === "mult"
+          ? `${up ? "UP" : "DOWN"} x${t.multiplier} · ${money(Number(t.stake))}`
+          : `${up ? "RISE" : "FALL"} · ${money(Number(t.stake))}`;
+      const out: { price: number; color: string; label: string }[] = [
+        { price: Number(t.entry_price), color, label },
+      ];
+      if (t.kind === "mult" && t.stop_out_price) {
+        out.push({ price: Number(t.stop_out_price), color: "#FFB020", label: "stop-out" });
+      }
+      return out;
+    });
 
   const showToast = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok });
@@ -155,6 +175,7 @@ export function TradeTerminal() {
   return (
     <div className="mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
       <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
+      <Onboarding />
       {/* KPI strip — hidden on phones so the trade controls fit on one screen */}
       <div className="mb-3 hidden shrink-0 grid-cols-2 gap-2 sm:grid sm:grid-cols-4">
         <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
@@ -249,12 +270,7 @@ export function TradeTerminal() {
                 <ChartSkeleton connected={feed.connected} />
               ) : (
                 <div className="h-full">
-                  <PriceChart
-                    points={feed.points}
-                    up={rising}
-                    decimals={dp}
-                    entryPrice={openTrades.find((t) => t.symbol === symbol)?.entry_price ?? null}
-                  />
+                  <PriceChart points={feed.points} up={rising} decimals={dp} markers={chartMarkers} />
                 </div>
               )}
             </div>
