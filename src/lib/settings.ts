@@ -29,6 +29,34 @@ export async function setHouseEdge(edge: number): Promise<number> {
   return clamped;
 }
 
+export const DEFAULT_REFERRAL_PCT = 0.1; // 10% of the referral's first deposit
+export const REFERRAL_CAP_CENTS = 10000; // never pay more than $100 per referral
+const REFERRAL_PCT_KEY = "referral_pct";
+
+/** Referral reward rate as a fraction of the referred user's first deposit. */
+export async function getReferralPct(): Promise<number> {
+  await ensureSchema();
+  const sql = db();
+  const rows = (await sql`
+    SELECT value FROM abetrade_settings WHERE key = ${REFERRAL_PCT_KEY} LIMIT 1
+  `) as Array<{ value: string }>;
+  const v = rows.length ? Number(rows[0].value) : NaN;
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : DEFAULT_REFERRAL_PCT;
+}
+
+/** Set the referral reward rate (fraction). Clamped to 0–50%. */
+export async function setReferralPct(pct: number): Promise<number> {
+  await ensureSchema();
+  const sql = db();
+  const clamped = Math.min(0.5, Math.max(0, Number(pct) || 0));
+  await sql`
+    INSERT INTO abetrade_settings (key, value, updated_at)
+    VALUES (${REFERRAL_PCT_KEY}, ${String(clamped)}, now())
+    ON CONFLICT (key) DO UPDATE SET value = ${String(clamped)}, updated_at = now()
+  `;
+  return clamped;
+}
+
 /** True if the account is blocked/suspended and must not trade or withdraw. */
 export async function isBlocked(userId: number): Promise<boolean> {
   const sql = db();

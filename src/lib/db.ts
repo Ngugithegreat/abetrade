@@ -115,6 +115,10 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`;
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS promo BOOLEAN NOT NULL DEFAULT false`;
 
+  // Referrals: who referred this user, and whether their first-deposit reward paid.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referred_by INTEGER`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referral_rewarded BOOLEAN NOT NULL DEFAULT false`;
+
   // Key/value settings store (house edge %, etc.).
   await sql`
     CREATE TABLE IF NOT EXISTS abetrade_settings (

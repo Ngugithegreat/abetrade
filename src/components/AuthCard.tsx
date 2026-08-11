@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { COUNTRIES } from "@/lib/countries";
@@ -15,8 +15,18 @@ export function AuthCard({ initial }: { initial: Mode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [country, setCountry] = useState("KE");
+  const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Pick up a referral code from the invite link (?ref=ST-100482).
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get("ref");
+    if (r) {
+      setRef(r.trim());
+      setMode("signup");
+    }
+  }, []);
 
   async function submit(kind: Mode, e: React.FormEvent) {
     e.preventDefault();
@@ -27,7 +37,9 @@ export function AuthCard({ initial }: { initial: Mode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          kind === "signup" ? { name, email, password, country } : { email, password }
+          kind === "signup"
+            ? { name, email, password, country, ref: ref || undefined }
+            : { email, password }
         ),
       });
       const json = await res.json();
@@ -84,6 +96,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
               setName={setName}
               country={country}
               setCountry={setCountry}
+              referral={ref}
               onSubmit={(e) => submit("signup", e)}
             />
           </div>
@@ -109,6 +122,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
               setName={setName}
               country={country}
               setCountry={setCountry}
+              referral={ref}
               onSubmit={(e) => submit("signup", e)}
             />
           )}
@@ -215,6 +229,7 @@ function SignUpForm(
     setName: (v: string) => void;
     country: string;
     setCountry: (v: string) => void;
+    referral?: string;
   }
 ) {
   return (
@@ -223,6 +238,11 @@ function SignUpForm(
         <h1 className="text-2xl font-bold">Create account</h1>
         <p className="mt-1 text-sm text-muted">Start trading in minutes.</p>
       </div>
+      {p.referral ? (
+        <div className="rounded-lg border border-up/30 bg-up/10 px-3 py-2 text-xs text-up">
+          🎁 Invited by <b>{p.referral}</b> — you’re joining with a referral.
+        </div>
+      ) : null}
       <input
         className="input"
         placeholder="Full name"

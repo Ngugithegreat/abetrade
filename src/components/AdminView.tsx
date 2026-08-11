@@ -115,8 +115,19 @@ export function AdminView() {
         <Kpi icon={Activity} label="Trades" value={String(k.tradeCount)} sub={`${winRate}% player win`} />
       </div>
 
-      {/* House edge control */}
-      <HouseEdgeCard edge={Number(data.houseEdge ?? 0.05)} onSave={(pct) => post({ action: "set_house_edge", percent: pct })} />
+      {/* House edge + referral controls */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <HouseEdgeCard edge={Number(data.houseEdge ?? 0.05)} onSave={(pct) => post({ action: "set_house_edge", percent: pct })} />
+        <RateCard
+          icon={Gift}
+          title="Referral reward"
+          blurb={(pct) =>
+            `Referrers earn ${pct || 0}% of each friend's first deposit (capped at $100), credited automatically.`
+          }
+          value={Number(data.referralPct ?? 0.1)}
+          onSave={(pct) => post({ action: "set_referral_pct", percent: pct })}
+        />
+      </div>
 
       {/* Volume chart */}
       <div className="card p-5">
@@ -349,6 +360,65 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
             {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RateCard({
+  icon: Icon,
+  title,
+  blurb,
+  value,
+  onSave,
+}: {
+  icon: any;
+  title: string;
+  blurb: (pct: string) => string;
+  value: number;
+  onSave: (pct: number) => Promise<Response>;
+}) {
+  const [pct, setPct] = useState(String(Math.round(value * 1000) / 10));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setPct(String(Math.round(value * 1000) / 10));
+  }, [value]);
+
+  async function save() {
+    const v = Number(pct);
+    if (!Number.isFinite(v) || v < 0 || v > 50) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onSave(v);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <Icon className="h-4 w-4 text-brand" /> {title}
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted">{blurb(pct)}</p>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
+          <input
+            value={pct}
+            onChange={(e) => setPct(e.target.value.replace(/[^0-9.]/g, ""))}
+            inputMode="decimal"
+            className="tabular w-16 bg-transparent text-right text-lg font-bold outline-none"
+          />
+          <span className="ml-1 text-muted">%</span>
+        </div>
+        <button onClick={save} disabled={saving} className="btn btn-brand px-4 py-2.5 text-sm">
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+        </button>
       </div>
     </div>
   );

@@ -63,12 +63,19 @@ export type AppConfig = {
   usdUgxRate: number;
 };
 
+export type Referral = {
+  code: string;
+  referredCount: number;
+  earnedCents: number;
+};
+
 type WalletData = {
   user: AppUser | null;
   transactions: Txn[];
   openTrades: Trade[];
   closedTrades: Trade[];
   config?: AppConfig;
+  referral?: Referral | null;
 };
 
 type Ctx = {

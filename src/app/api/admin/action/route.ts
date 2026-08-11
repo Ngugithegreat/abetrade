@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { setHouseEdge } from "@/lib/settings";
+import { setHouseEdge, setReferralPct } from "@/lib/settings";
 import { sendEmail, depositReceiptEmail } from "@/lib/email";
+import { payReferralOnDeposit } from "@/lib/referral";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,16 @@ export async function POST(req: Request) {
     }
     const edge = await setHouseEdge(pct / 100);
     return NextResponse.json({ ok: true, houseEdge: edge });
+  }
+
+  // ---- Referral reward rate (percent, e.g. 10 => 0.10) ----
+  if (action === "set_referral_pct") {
+    const pct = Number(body.percent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 50) {
+      return NextResponse.json({ error: "Referral rate must be between 0 and 50%." }, { status: 400 });
+    }
+    const rate = await setReferralPct(pct / 100);
+    return NextResponse.json({ ok: true, referralPct: rate });
   }
 
   // ---- Account controls ----
@@ -104,6 +115,8 @@ export async function POST(req: Request) {
   if (tx.type === "deposit" && action === "approve") {
     // Credit the user now.
     await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${tx.user_id}`;
+    // Pay referral reward on the user's first deposit (idempotent).
+    await payReferralOnDeposit(tx.user_id, amount).catch(() => {});
     // Email receipt (fire-and-forget).
     void (async () => {
       try {

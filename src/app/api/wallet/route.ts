@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { accountNo } from "@/lib/format";
+import { referralStats } from "@/lib/referral";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
 import { isPaystackConfigured } from "@/lib/paystack";
@@ -29,11 +30,12 @@ export async function GET() {
   }
 
   const sql = db();
-  const [userRows, txns, openTrades, closedTrades] = await Promise.all([
+  const [userRows, txns, openTrades, closedTrades, refStats] = await Promise.all([
     sql`SELECT id, name, email, role, balance, country, status FROM abetrade_users WHERE id = ${session.id}` as Promise<any[]>,
     sql`SELECT * FROM abetrade_transactions WHERE user_id = ${session.id} ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status = 'open' ORDER BY created_at DESC` as Promise<any[]>,
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status != 'open' ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
+    referralStats(session.id),
   ]);
 
   const u = userRows[0];
@@ -42,6 +44,9 @@ export async function GET() {
     transactions: txns,
     openTrades,
     closedTrades,
+    referral: u
+      ? { code: accountNo(u.id), referredCount: refStats.referredCount, earnedCents: refStats.earnedCents }
+      : null,
     config: {
       mpesaDeposit: isMpesaConfigured(),
       mpesaWithdraw: isB2cConfigured(),

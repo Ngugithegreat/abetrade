@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { getHouseEdge } from "@/lib/settings";
+import { getHouseEdge, getReferralPct } from "@/lib/settings";
 import { accountNo } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -56,7 +56,7 @@ export async function GET() {
     ` as Promise<any[]>,
   ]);
 
-  const houseEdge = await getHouseEdge();
+  const [houseEdge, referralPct] = await Promise.all([getHouseEdge(), getReferralPct()]);
   const k = kpi[0] || {};
   const num = (v: any) => Number(v ?? 0);
 
@@ -79,6 +79,7 @@ export async function GET() {
     },
     daily: daily.map((d) => ({ day: d.day, volume: num(d.volume) })),
     houseEdge, // fraction, e.g. 0.05
+    referralPct, // fraction, e.g. 0.10
     topUsers: topUsers.map((u) => ({
       ...u,
       account_no: accountNo(u.id),

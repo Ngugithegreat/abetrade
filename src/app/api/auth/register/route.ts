@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { hashPassword, createSession } from "@/lib/auth";
 import { sendEmail, welcomeEmail } from "@/lib/email";
+import { idFromAccountNo } from "@/lib/format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, country } = await req.json();
+    const { name, email, password, country, ref } = await req.json();
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "All fields are required." }, { status: 400 });
@@ -44,9 +45,19 @@ export async function POST(req: Request) {
 
     const hash = await hashPassword(String(password));
 
+    // Resolve an optional referral code (account number) to the referrer's id.
+    let referredBy: number | null = null;
+    if (ref) {
+      const rid = idFromAccountNo(String(ref));
+      if (rid) {
+        const r = (await sql`SELECT id FROM abetrade_users WHERE id = ${rid} LIMIT 1`) as any[];
+        if (r.length) referredBy = rid;
+      }
+    }
+
     const rows = (await sql`
-      INSERT INTO abetrade_users (name, email, password_hash, role, balance, country)
-      VALUES (${String(name).trim()}, ${cleanEmail}, ${hash}, ${role}, 0, ${cleanCountry})
+      INSERT INTO abetrade_users (name, email, password_hash, role, balance, country, referred_by)
+      VALUES (${String(name).trim()}, ${cleanEmail}, ${hash}, ${role}, 0, ${cleanCountry}, ${referredBy})
       RETURNING id, email, name, role
     `) as any[];
 

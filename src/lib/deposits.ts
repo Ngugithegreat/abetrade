@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { sendEmail, depositReceiptEmail } from "./email";
+import { payReferralOnDeposit } from "./referral";
 
 // Shared, idempotent crediting for automated deposits. Every provider webhook
 // funnels through here: it finds the PENDING deposit by its provider reference,
@@ -52,6 +53,9 @@ export async function creditPendingDeposit(
   if (!claimed.length) return { ok: false, reason: "race" };
 
   await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${tx.user_id}`;
+
+  // Pay the referrer their share if this is the user's first deposit (idempotent).
+  await payReferralOnDeposit(tx.user_id, amount).catch(() => {});
 
   // Email receipt — fire-and-forget so crediting never depends on email.
   void (async () => {

@@ -14,8 +14,12 @@ import {
   Landmark,
   Bitcoin,
   Loader2,
+  Gift,
+  Copy,
+  Check,
+  Users,
 } from "lucide-react";
-import { useApp, Txn } from "./app-context";
+import { useApp, Txn, Referral } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 import { railsForCountry } from "@/lib/countries";
 
@@ -149,6 +153,65 @@ export function WalletView() {
             Recent activity
           </div>
           <TxnList txns={data?.transactions ?? []} />
+        </div>
+      </div>
+
+      {data?.referral && <ReferralCard referral={data.referral} />}
+    </div>
+  );
+}
+
+function ReferralCard({ referral }: { referral: Referral }) {
+  const [copied, setCopied] = useState(false);
+  // Start with the relative path (matches on server + first client render),
+  // then upgrade to the absolute URL after mount to avoid a hydration mismatch.
+  const path = `/register?ref=${referral.code}`;
+  const [link, setLink] = useState(path);
+  useEffect(() => {
+    setLink(window.location.origin + path);
+  }, [path]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — user can select manually */
+    }
+  }
+
+  return (
+    <div className="card relative overflow-hidden p-5">
+      <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-brand/20 blur-3xl" />
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <Gift className="h-4 w-4 text-brand" /> Invite friends, earn rewards
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Share your link. When a friend signs up and makes their first deposit, you earn a bonus —
+        credited straight to your balance.
+      </p>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <div className="tabular flex-1 truncate rounded-xl border border-border bg-surface2 px-3 py-2.5 text-sm">
+          {link}
+        </div>
+        <button onClick={copy} className="btn btn-brand shrink-0 px-4 py-2.5 text-sm">
+          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          {copied ? "Copied" : "Copy link"}
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border bg-surface2/60 px-3 py-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted">
+            <Users className="h-3 w-3" /> Friends referred
+          </div>
+          <div className="tabular mt-0.5 text-xl font-bold">{referral.referredCount}</div>
+        </div>
+        <div className="rounded-xl border border-border bg-surface2/60 px-3 py-2.5">
+          <div className="text-[11px] uppercase tracking-wider text-muted">Rewards earned</div>
+          <div className="tabular mt-0.5 text-xl font-bold text-up">{money(referral.earnedCents)}</div>
         </div>
       </div>
     </div>

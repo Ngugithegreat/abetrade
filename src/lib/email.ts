@@ -143,6 +143,23 @@ export function withdrawalReceiptEmail(
   return { subject: `Withdrawal request received — ${amt}`, html, text: `We received your SinTrades withdrawal request of ${amt} to ${destination}. Processing now.` };
 }
 
+export function referralEarnedEmail(
+  name: string,
+  usd: number,
+  friend: string
+): { subject: string; html: string; text: string } {
+  const first = (name || "there").split(" ")[0];
+  const amt = `$${usd.toFixed(2)}`;
+  const url = `${siteUrl()}/wallet`;
+  const html = shell(
+    `<h1 style="margin:0 0 12px;color:#ffffff;font-size:22px;">You earned a referral reward 🎉</h1>
+     <p style="margin:0 0 16px;">Nice one, ${first}! <b>${(friend || "Someone you referred").split(" ")[0]}</b> just made their first deposit, so we've added <b style="color:#00E39A;">${amt}</b> to your SinTrades balance.</p>
+     <p style="margin:0 0 22px;">${button("View your balance", url)}</p>
+     <p style="margin:0;color:#9aa1b1;font-size:13px;">Keep sharing your link to earn more.</p>`
+  );
+  return { subject: `You earned ${amt} in referral rewards`, html, text: `${friend} made their first deposit — you earned ${amt} on SinTrades.` };
+}
+
 export function resetPasswordEmail(name: string, link: string): { subject: string; html: string; text: string } {
   const first = (name || "there").split(" ")[0];
   const html = shell(
