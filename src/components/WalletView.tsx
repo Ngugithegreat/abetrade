@@ -18,10 +18,13 @@ import {
   Copy,
   Check,
   Users,
+  ShieldCheck,
+  ShieldAlert,
 } from "lucide-react";
-import { useApp, Txn, Referral } from "./app-context";
+import { useApp, Txn, Referral, AppUser } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 import { railsForCountry } from "@/lib/countries";
+import { ListSkeleton } from "./Skeleton";
 
 type MethodDef = { id: string; label: string; hint: string; icon: any };
 
@@ -152,10 +155,11 @@ export function WalletView() {
           <div className="border-b border-border px-5 py-3 font-bold">
             Recent activity
           </div>
-          <TxnList txns={data?.transactions ?? []} />
+          {loading && !data ? <ListSkeleton rows={5} /> : <TxnList txns={data?.transactions ?? []} />}
         </div>
       </div>
 
+      {user && <KycCard user={user} refresh={refresh} />}
       {data?.referral && <ReferralCard referral={data.referral} />}
     </div>
   );
@@ -249,6 +253,94 @@ function CryptoDepositPanel({
 
       <button onClick={onReset} className="btn btn-ghost w-full py-2.5 text-sm">
         {status === "failed" ? "Start over" : "Cancel"}
+      </button>
+    </div>
+  );
+}
+
+function KycCard({ user, refresh }: { user: AppUser; refresh: () => Promise<void> }) {
+  const status = user.kyc_status || "none";
+  const [name, setName] = useState(user.name || "");
+  const [idNumber, setIdNumber] = useState("");
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (status === "approved") {
+    return (
+      <div className="card flex items-center gap-3 p-4">
+        <ShieldCheck className="h-6 w-6 text-up" />
+        <div>
+          <div className="text-sm font-bold">Identity verified</div>
+          <div className="text-xs text-muted">Your account is fully verified — no withdrawal limits.</div>
+        </div>
+        <span className="ml-auto rounded-md bg-up/15 px-2 py-0.5 text-[10px] font-bold uppercase text-up">
+          Verified
+        </span>
+      </div>
+    );
+  }
+
+  if (status === "pending") {
+    return (
+      <div className="card flex items-center gap-3 p-4">
+        <Clock className="h-6 w-6 text-gold" />
+        <div>
+          <div className="text-sm font-bold">Verification under review</div>
+          <div className="text-xs text-muted">
+            We're reviewing your details — this is usually done within a few hours. We'll email you.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  async function submit() {
+    setErr(null);
+    if (name.trim().length < 3 || idNumber.trim().length < 4 || phone.trim().length < 7) {
+      setErr("Please fill in all fields correctly.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/kyc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, idNumber, phone }),
+      });
+      const json = await res.json();
+      if (!res.ok) setErr(json.error || "Could not submit.");
+      else await refresh();
+    } catch {
+      setErr("Network error. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <ShieldAlert className="h-4 w-4 text-brand" /> Verify your identity
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Required for withdrawals of $200 or more. Verify once and it's done for good.
+      </p>
+
+      {status === "rejected" && user.kyc_reason && (
+        <div className="mt-3 rounded-xl border border-down/40 bg-down/10 px-3 py-2 text-xs text-down">
+          Your last submission was declined: {user.kyc_reason} — please correct and resubmit.
+        </div>
+      )}
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <input className="input" placeholder="Full legal name" value={name} onChange={(e) => setName(e.target.value)} />
+        <input className="input" placeholder="ID / passport no." value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
+        <input className="input" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      </div>
+      {err && <p className="mt-2 text-xs text-down">{err}</p>}
+      <button onClick={submit} disabled={busy} className="btn btn-brand mt-3 px-5 py-2.5 text-sm">
+        {busy ? "Submitting…" : "Submit for verification"}
       </button>
     </div>
   );

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { setHouseEdge, setReferralPct } from "@/lib/settings";
-import { sendEmail, depositReceiptEmail } from "@/lib/email";
+import { sendEmail, depositReceiptEmail, kycApprovedEmail, kycRejectedEmail } from "@/lib/email";
 import { payReferralOnDeposit } from "@/lib/referral";
 
 export const runtime = "nodejs";
@@ -87,6 +87,38 @@ export async function POST(req: Request) {
       VALUES (${userId}, 'bonus', ${amount}, 'completed', 'promo', 'Promotional credit')
     `;
     return NextResponse.json({ ok: true, balance: Number(rows[0].balance) });
+  }
+
+  // ---- KYC verification: approve or reject with a reason ----
+  if (action === "kyc_approve" || action === "kyc_reject") {
+    const userId = Number(body.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: "Bad user." }, { status: 400 });
+    }
+    if (action === "kyc_approve") {
+      await sql`UPDATE abetrade_users SET kyc_status = 'approved', kyc_reason = NULL WHERE id = ${userId}`;
+    } else {
+      const reason = String(body.reason || "").trim() || "Your details could not be verified.";
+      await sql`UPDATE abetrade_users SET kyc_status = 'rejected', kyc_reason = ${reason} WHERE id = ${userId}`;
+    }
+    void (async () => {
+      try {
+        const u = (await sql`SELECT email, name FROM abetrade_users WHERE id = ${userId} LIMIT 1`) as Array<{
+          email: string;
+          name: string;
+        }>;
+        if (u.length && u[0].email) {
+          const mail =
+            action === "kyc_approve"
+              ? kycApprovedEmail(u[0].name)
+              : kycRejectedEmail(u[0].name, String(body.reason || ""));
+          await sendEmail({ to: u[0].email, subject: mail.subject, html: mail.html, text: mail.text });
+        }
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return NextResponse.json({ ok: true });
   }
 
   // ---- Approve / reject a pending deposit or withdrawal ----

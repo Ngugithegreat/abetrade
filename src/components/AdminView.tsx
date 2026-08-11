@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { money, shortTime } from "@/lib/format";
+import { AdminSkeleton } from "./Skeleton";
 
 type Pending = {
   id: number;
@@ -90,7 +91,7 @@ export function AdminView() {
 
   if (forbidden)
     return <div className="card p-8 text-center text-muted">You don’t have access to the admin panel.</div>;
-  if (loading || !data) return <div className="card p-8 text-center text-muted">Loading…</div>;
+  if (loading || !data) return <AdminSkeleton />;
 
   const k = data.kpi;
   const pending: Pending[] = data.pending || [];
@@ -194,6 +195,47 @@ export function AdminView() {
           </div>
         )}
       </div>
+
+      {/* KYC verifications */}
+      {(data.kyc || []).length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="border-b border-border px-5 py-3 font-bold">
+            Identity verifications ({data.kyc.length})
+          </div>
+          <div className="divide-y divide-border">
+            {(data.kyc as any[]).map((k) => (
+              <div key={k.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+                <div>
+                  <div className="text-sm font-semibold">
+                    {k.kyc_name} <span className="text-[11px] text-muted">({k.account_no})</span>
+                  </div>
+                  <div className="text-xs text-muted">
+                    ID: {k.kyc_id_number} · {k.kyc_phone} · {k.email}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => post({ action: "kyc_approve", userId: k.id })}
+                    className="btn py-1.5 px-3 text-xs text-white"
+                    style={{ background: "linear-gradient(180deg,#00e396,#00b877)" }}
+                  >
+                    <Check className="h-3.5 w-3.5" /> Approve
+                  </button>
+                  <button
+                    onClick={() => {
+                      const r = window.prompt(`Reason for rejecting ${k.kyc_name}'s verification:`, "");
+                      if (r != null) post({ action: "kyc_reject", userId: k.id, reason: r });
+                    }}
+                    className="btn btn-ghost py-1.5 px-3 text-xs text-down"
+                  >
+                    <X className="h-3.5 w-3.5" /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Player management */}
       <div className="card overflow-hidden">

@@ -119,6 +119,14 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referred_by INTEGER`;
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referral_rewarded BOOLEAN NOT NULL DEFAULT false`;
 
+  // KYC (identity verification) — required for large withdrawals.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS kyc_status TEXT NOT NULL DEFAULT 'none'`; // none | pending | approved | rejected
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS kyc_name TEXT`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS kyc_id_number TEXT`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS kyc_phone TEXT`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS kyc_reason TEXT`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS kyc_submitted_at TIMESTAMPTZ`;
+
   // Key/value settings store (house edge %, etc.).
   await sql`
     CREATE TABLE IF NOT EXISTS abetrade_settings (

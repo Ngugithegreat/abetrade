@@ -14,7 +14,7 @@ export async function GET() {
   await ensureSchema();
   const sql = db();
 
-  const [pending, users, kpi, daily, topUsers] = await Promise.all([
+  const [pending, users, kpi, daily, topUsers, kycPending] = await Promise.all([
     sql`
       SELECT t.*, u.email, u.name AS user_name
       FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
@@ -54,6 +54,13 @@ export async function GET() {
       ORDER BY trades DESC NULLS LAST, u.created_at DESC
       LIMIT 40
     ` as Promise<any[]>,
+    sql`
+      SELECT id, name, email, kyc_name, kyc_id_number, kyc_phone, kyc_submitted_at
+      FROM abetrade_users
+      WHERE kyc_status = 'pending'
+      ORDER BY kyc_submitted_at ASC NULLS LAST
+      LIMIT 50
+    ` as Promise<any[]>,
   ]);
 
   const [houseEdge, referralPct] = await Promise.all([getHouseEdge(), getReferralPct()]);
@@ -80,6 +87,15 @@ export async function GET() {
     daily: daily.map((d) => ({ day: d.day, volume: num(d.volume) })),
     houseEdge, // fraction, e.g. 0.05
     referralPct, // fraction, e.g. 0.10
+    kyc: kycPending.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      account_no: accountNo(u.id),
+      kyc_name: u.kyc_name,
+      kyc_id_number: u.kyc_id_number,
+      kyc_phone: u.kyc_phone,
+    })),
     topUsers: topUsers.map((u) => ({
       ...u,
       account_no: accountNo(u.id),

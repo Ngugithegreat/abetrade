@@ -143,6 +143,31 @@ export function withdrawalReceiptEmail(
   return { subject: `Withdrawal request received — ${amt}`, html, text: `We received your SinTrades withdrawal request of ${amt} to ${destination}. Processing now.` };
 }
 
+export function kycApprovedEmail(name: string): { subject: string; html: string; text: string } {
+  const first = (name || "there").split(" ")[0];
+  const url = `${siteUrl()}/wallet`;
+  const html = shell(
+    `<h1 style="margin:0 0 12px;color:#ffffff;font-size:22px;">You're verified ✅</h1>
+     <p style="margin:0 0 16px;">Good news, ${first} — your identity has been verified. You can now withdraw any amount from your SinTrades account.</p>
+     <p style="margin:0 0 4px;">${button("Go to your wallet", url)}</p>`
+  );
+  return { subject: "Your SinTrades account is verified", html, text: "Your identity has been verified — you can now make large withdrawals." };
+}
+
+export function kycRejectedEmail(name: string, reason: string): { subject: string; html: string; text: string } {
+  const first = (name || "there").split(" ")[0];
+  const url = `${siteUrl()}/wallet`;
+  const why = reason && reason.trim() ? reason.trim() : "The details couldn't be verified.";
+  const html = shell(
+    `<h1 style="margin:0 0 12px;color:#ffffff;font-size:22px;">Verification needs another look</h1>
+     <p style="margin:0 0 12px;">Hi ${first}, we couldn't verify your account this time.</p>
+     <p style="margin:0 0 16px;padding:10px 14px;border-left:3px solid #FF4D6D;background:#1a1420;color:#ffd7dd;">${why}</p>
+     <p style="margin:0 0 16px;">You can update your details and resubmit anytime.</p>
+     <p style="margin:0 0 4px;">${button("Resubmit verification", url)}</p>`
+  );
+  return { subject: "Action needed: verify your SinTrades account", html, text: `Your verification was not approved: ${why}` };
+}
+
 export function referralEarnedEmail(
   name: string,
   usd: number,

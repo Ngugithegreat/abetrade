@@ -51,6 +51,8 @@ export type AppUser = {
   country: string | null;
   account_no?: string;
   status?: string;
+  kyc_status?: string;
+  kyc_reason?: string | null;
 };
 
 export type AppConfig = {

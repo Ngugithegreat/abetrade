@@ -12,6 +12,8 @@ import {
   Wallet,
   Hash,
   ChevronDown,
+  Bell,
+  BellRing,
 } from "lucide-react";
 import Link from "next/link";
 import { Sparkles } from "lucide-react";
@@ -43,6 +45,29 @@ import { money, cents } from "@/lib/format";
 const QUICK_STAKES = [1, 5, 10, 25, 50, 100];
 type Contract = "rise_fall" | "mult" | "digit";
 
+// Short chime for a triggered price alert (best-effort; ignored if blocked).
+function beep() {
+  try {
+    const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.type = "sine";
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    o.start();
+    o.stop(ctx.currentTime + 0.36);
+    setTimeout(() => ctx.close(), 500);
+  } catch {
+    /* audio blocked — the toast still shows */
+  }
+}
+
 export function TradeTerminal() {
   const { balance, setBalance, data, refresh, loading } = useApp();
   const [symbol, setSymbol] = useState("1HZ100V");
@@ -58,6 +83,8 @@ export function TradeTerminal() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [placing, setPlacing] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [alertPrice, setAlertPrice] = useState<number | null>(null);
+  const alertPrevRef = useRef<number | null>(null);
 
   const feed = useDerivFeed(symbol);
   const markets = useDerivMarkets(MARKETS.map((m) => m.symbol));
@@ -113,6 +140,39 @@ export function TradeTerminal() {
     const id = setInterval(() => refresh(), 6000);
     return () => clearInterval(id);
   }, [hasOpenMult, refresh]);
+
+  // Price alert (in-app): arm a target for the current market, seeding the
+  // previous price so crossing is measured from now.
+  const armAlert = useCallback(
+    (price: number) => {
+      alertPrevRef.current = feed.last?.price ?? null;
+      setAlertPrice(price);
+    },
+    [feed.last]
+  );
+
+  // Clear the alert when the market changes.
+  useEffect(() => {
+    setAlertPrice(null);
+    alertPrevRef.current = null;
+  }, [symbol]);
+
+  // Fire the alert the moment the live price crosses the target.
+  useEffect(() => {
+    if (alertPrice == null || !feed.last) return;
+    const cur = feed.last.price;
+    const prev = alertPrevRef.current;
+    if (prev != null && prev !== cur) {
+      const crossed =
+        (prev < alertPrice && cur >= alertPrice) || (prev > alertPrice && cur <= alertPrice);
+      if (crossed) {
+        showToast(`🔔 ${market.short} reached ${alertPrice.toFixed(dp)}`, true);
+        beep();
+        setAlertPrice(null);
+      }
+    }
+    alertPrevRef.current = cur;
+  }, [feed.last, alertPrice, market.short, dp, showToast]);
 
   async function place(direction: string, extra?: Record<string, unknown>) {
     if (!stakeValid || placing) return;
@@ -223,6 +283,13 @@ export function TradeTerminal() {
                 <div className="flex items-center gap-2">
                   <MarketDropdown symbol={symbol} onSelect={setSymbol} />
                   <ConnBadge connected={feed.connected} />
+                  <AlertControl
+                    current={feed.last?.price ?? null}
+                    dp={dp}
+                    target={alertPrice}
+                    onArm={armAlert}
+                    onClear={() => setAlertPrice(null)}
+                  />
                 </div>
                 <div className="truncate text-[11px] text-muted">
                   {market.volatility} volatility · synthetic index
@@ -645,6 +712,85 @@ function DigitControls({
 }
 
 /* ---------------- Small pieces ---------------- */
+
+/* In-app price alert: pick a target price for the current market; you get a
+   toast + chime the moment the live price crosses it (works while the tab is open). */
+function AlertControl({
+  current,
+  dp,
+  target,
+  onArm,
+  onClear,
+}: {
+  current: number | null;
+  dp: number;
+  target: number | null;
+  onArm: (price: number) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState("");
+
+  function openPopover() {
+    setVal(current != null ? current.toFixed(dp) : "");
+    setOpen(true);
+  }
+
+  function arm() {
+    const p = Number(val);
+    if (Number.isFinite(p) && p > 0) {
+      onArm(p);
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => (open ? setOpen(false) : openPopover())}
+        title="Set a price alert"
+        className={`flex h-6 items-center gap-1 rounded-full px-2 text-[10px] font-semibold transition ${
+          target != null ? "bg-brand/15 text-brand" : "bg-surface2 text-muted hover:text-fg"
+        }`}
+      >
+        {target != null ? <BellRing className="h-3 w-3" /> : <Bell className="h-3 w-3" />}
+        {target != null ? target.toFixed(dp) : "Alert"}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-50 mt-1 w-52 rounded-xl border border-border bg-surface p-3 shadow-card">
+            <div className="mb-1.5 text-[11px] font-semibold text-muted">Alert me when price hits</div>
+            <div className="flex gap-1.5">
+              <input
+                className="input tabular h-9 text-sm"
+                inputMode="decimal"
+                value={val}
+                onChange={(e) => setVal(e.target.value.replace(/[^0-9.]/g, ""))}
+                onKeyDown={(e) => e.key === "Enter" && arm()}
+                autoFocus
+              />
+              <button onClick={arm} className="btn btn-brand h-9 shrink-0 px-3 text-xs">
+                Set
+              </button>
+            </div>
+            {target != null && (
+              <button
+                onClick={() => {
+                  onClear();
+                  setOpen(false);
+                }}
+                className="mt-2 w-full text-[11px] text-down hover:underline"
+              >
+                Clear alert
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /* Symbol dropdown in the chart header — the single place to switch markets. */
 function MarketDropdown({ symbol, onSelect }: { symbol: string; onSelect: (s: string) => void }) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { isBlocked } from "@/lib/settings";
+import { requiresKyc, getKycStatus } from "@/lib/kyc";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
 import {
@@ -67,6 +68,21 @@ export async function POST(req: Request) {
       { error: "Your account is suspended. Please contact support." },
       { status: 403 }
     );
+  }
+
+  // Large withdrawals require an approved identity verification.
+  if (requiresKyc(amount)) {
+    const kyc = await getKycStatus(session.id);
+    if (kyc !== "approved") {
+      return NextResponse.json(
+        {
+          error:
+            "Withdrawals of $200 or more require identity verification. Please verify your account in the Wallet, then try again.",
+          kycRequired: true,
+        },
+        { status: 403 }
+      );
+    }
   }
 
   // Reserve funds atomically.
