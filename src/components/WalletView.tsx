@@ -236,8 +236,9 @@ function MoneyForm({
 
   async function submit() {
     setMsg(null);
-    if (amountNum < 1) {
-      setMsg({ text: "Minimum is $1.00.", ok: false });
+    const minUsd = kind === "deposit" ? 5 : 1;
+    if (amountNum < minUsd) {
+      setMsg({ text: `Minimum ${kind} is $${minUsd}.00.`, ok: false });
       return;
     }
     if (kind === "withdraw" && amountNum * 100 > max) {
@@ -287,7 +288,7 @@ function MoneyForm({
     <div className="space-y-3">
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">
-          Amount (USD)
+          Amount (USD){kind === "deposit" ? " · min $5" : ""}
         </label>
         <input
           className="input tabular"

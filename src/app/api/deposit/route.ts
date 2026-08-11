@@ -43,8 +43,8 @@ export async function POST(req: Request) {
   const method = String(body.method || "manual");
   const reference = String(body.reference || "").trim();
 
-  if (!Number.isFinite(amount) || amount < 100) {
-    return NextResponse.json({ error: "Minimum deposit is $1.00." }, { status: 400 });
+  if (!Number.isFinite(amount) || amount < 500) {
+    return NextResponse.json({ error: "Minimum deposit is $5.00." }, { status: 400 });
   }
   if (amount > 100000000) {
     return NextResponse.json({ error: "Amount too large." }, { status: 400 });
