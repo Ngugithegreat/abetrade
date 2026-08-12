@@ -88,15 +88,20 @@ export const DEFAULT_DIGIT_TICKS = 1;
 
 export type DigitSubtype = "even_odd" | "over_under" | "matches_differs";
 
-/** Fair multiplier for a given win probability, minus the house edge. */
+// A winning trade must ALWAYS return more than the stake, so a win is always a
+// real profit. Without this floor a high edge (or a high-probability digit bet)
+// could price the payout at <= 1.0x, making a "win" pay back only the stake.
+const MIN_PAYOUT_MULT = 1.05;
+
+/** Fair multiplier for a given win probability, minus the house edge (floored). */
 export function payoutFromProb(prob: number, edge: number = DIGIT_HOUSE_EDGE): number {
   const m = (1 / prob) * (1 - edge);
-  return Math.round(m * 100) / 100;
+  return Math.max(MIN_PAYOUT_MULT, Math.round(m * 100) / 100);
 }
 
 /** Rise/Fall (even-money) multiplier for a given house edge. 5% edge -> 1.9x. */
 export function riseFallMult(edge: number = DIGIT_HOUSE_EDGE): number {
-  return Math.round(2 * (1 - edge) * 100) / 100;
+  return Math.max(MIN_PAYOUT_MULT, Math.round(2 * (1 - edge) * 100) / 100);
 }
 
 /**

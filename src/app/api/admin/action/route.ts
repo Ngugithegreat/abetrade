@@ -29,8 +29,8 @@ export async function POST(req: Request) {
   // ---- House edge (percent, e.g. 5 => 0.05) ----
   if (action === "set_house_edge") {
     const pct = Number(body.percent);
-    if (!Number.isFinite(pct) || pct < 0 || pct > 50) {
-      return NextResponse.json({ error: "Edge must be between 0 and 50%." }, { status: 400 });
+    if (!Number.isFinite(pct) || pct < 0 || pct > 15) {
+      return NextResponse.json({ error: "House edge must be between 0 and 15%." }, { status: 400 });
     }
     const edge = await setHouseEdge(pct / 100);
     return NextResponse.json({ ok: true, houseEdge: edge });

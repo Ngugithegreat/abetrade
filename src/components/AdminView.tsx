@@ -364,7 +364,7 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
 
   async function save() {
     const v = Number(pct);
-    if (!Number.isFinite(v) || v < 0 || v > 50) return;
+    if (!Number.isFinite(v) || v < 0 || v > 15) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -385,7 +385,8 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
           </div>
           <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
             The edge baked into every payout. At {pct || 0}% the house keeps ~{pct || 0}% of all
-            volume over time. Rise/Fall pays {(2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}×.
+            volume over time. Rise/Fall pays {Math.max(1.05, 2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}×.
+            Max 15% — a higher edge would leave winners no profit.
           </p>
         </div>
         <div className="flex items-center gap-2">
