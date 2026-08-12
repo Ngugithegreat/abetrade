@@ -124,22 +124,15 @@ export async function POST(req: Request) {
     payoutMult = digitPayoutMult(subtype!, direction, barrier!, edge);
   }
 
-  // Exposure limits protect the house bankroll from a single large trade.
+  // Exposure limits protect the house bankroll. Stake is capped (rejected if too
+  // big); the payout is CAPPED (the trade still runs, it just can't win more than
+  // the max) — like a real broker's max-payout rule.
   const [maxStake, maxPayout] = await Promise.all([getMaxStakeCents(), getMaxPayoutCents()]);
   if (stake > maxStake) {
     return NextResponse.json(
       { error: `Max stake per trade is $${(maxStake / 100).toFixed(0)}.` },
       { status: 400 }
     );
-  }
-  if (kind !== "mult") {
-    const mult = kind === "rise_fall" ? riseFallMult(edge) : payoutMult;
-    if (Math.round(stake * mult) > maxPayout) {
-      return NextResponse.json(
-        { error: `That would win more than the $${(maxPayout / 100).toFixed(0)} max per trade — lower your stake.` },
-        { status: 400 }
-      );
-    }
   }
 
   // Entry tick. For DIGIT contracts the entry price is irrelevant to the outcome
@@ -180,9 +173,12 @@ export async function POST(req: Request) {
   }
   const newBalance = Number(debit[0].balance);
 
+  // Every dollar staked works off any locked bonus (1x wagering to unlock).
+  await sql`UPDATE abetrade_users SET bonus_locked = GREATEST(0, bonus_locked - ${stake}) WHERE id = ${session.id}`;
+
   let rows: any[];
   if (kind === "rise_fall") {
-    const payout = Math.round(stake * riseFallMult(edge));
+    const payout = Math.min(maxPayout, Math.round(stake * riseFallMult(edge)));
     const expiry = entry.epoch + duration;
     rows = (await sql`
       INSERT INTO abetrade_trades
@@ -204,7 +200,7 @@ export async function POST(req: Request) {
       RETURNING *
     `) as any[];
   } else {
-    const payout = Math.round(stake * payoutMult);
+    const payout = Math.min(maxPayout, Math.round(stake * payoutMult));
     const expiry = entry.epoch + duration;
     rows = (await sql`
       INSERT INTO abetrade_trades

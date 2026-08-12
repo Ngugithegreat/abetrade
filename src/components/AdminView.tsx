@@ -104,15 +104,19 @@ export function AdminView() {
 
   return (
     <div className="space-y-5">
-      {/* KPIs */}
+      {/* Cash-position KPIs — the numbers that tell you if the company is up */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Kpi icon={Landmark} label="Net cash (real money)" value={money(k.netCash ?? 0, { sign: true })} sub="deposits − withdrawals" accent={(k.netCash ?? 0) >= 0 ? "up" : "down"} />
+        <Kpi icon={Wallet} label="Player balances (owed)" value={money(k.totalBalance)} sub={`incl. ${money(k.bonusLocked ?? 0)} locked bonus`} accent="gold" />
+        <Kpi icon={Gift} label="Bonuses issued" value={money(k.bonusIssued ?? 0)} sub="not real deposits" />
+        <Kpi icon={TrendingUp} label="House trading P&L" value={money(k.houseProfit, { sign: true })} sub="staked − paid (GGR)" accent={k.houseProfit >= 0 ? "up" : "down"} />
+      </div>
+
+      {/* Activity KPIs */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi icon={Users} label="Users" value={String(k.userCount)} />
-        <Kpi icon={Wallet} label="Player balances" value={money(k.totalBalance)} />
         <Kpi icon={ArrowDownToLine} label="Deposits" value={money(k.depositsTotal)} sub={`${k.depositsPending} pending`} accent="up" />
         <Kpi icon={ArrowUpFromLine} label="Withdrawals" value={money(k.withdrawalsTotal)} sub={`${k.withdrawalsPending} pending`} accent="gold" />
-        <Kpi icon={Coins} label="Total staked" value={money(k.stakedTotal)} />
-        <Kpi icon={TrendingUp} label="Total paid out" value={money(k.payoutTotal)} />
-        <Kpi icon={Landmark} label="House P&L" value={money(k.houseProfit, { sign: true })} accent={k.houseProfit >= 0 ? "up" : "down"} />
         <Kpi icon={Activity} label="Trades" value={String(k.tradeCount)} sub={`${winRate}% player win`} />
       </div>
 
@@ -380,7 +384,7 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
 
   async function save() {
     const v = Number(pct);
-    if (!Number.isFinite(v) || v < 0 || v > 15) return;
+    if (!Number.isFinite(v) || v < 0 || v > 100) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -402,7 +406,7 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
           <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
             The edge baked into every payout. At {pct || 0}% the house keeps ~{pct || 0}% of all
             volume over time. Rise/Fall pays {Math.max(1.05, 2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}×.
-            Max 15% — a higher edge would leave winners no profit.
+            Uncapped for testing — payouts never drop below 1.05× (winners always get a small profit).
           </p>
         </div>
         <div className="flex items-center gap-2">

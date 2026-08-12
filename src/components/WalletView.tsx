@@ -85,9 +85,15 @@ export function WalletView() {
         <div className="tabular mt-1 text-4xl font-black text-fg">
           {loading ? "—" : money(balance)}
         </div>
-        <div className="mt-1 text-xs text-muted">
-          Funds are held securely and settle to your withdrawals on request.
-        </div>
+        {user?.bonus_locked ? (
+          <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/10 px-2.5 py-1 text-[11px] text-gold">
+            <Gift className="h-3 w-3" /> {money(user.bonus_locked)} bonus — trade it to unlock for withdrawal
+          </div>
+        ) : (
+          <div className="mt-1 text-xs text-muted">
+            Funds are held securely and settle to your withdrawals on request.
+          </div>
+        )}
       </div>
 
       {processing && (

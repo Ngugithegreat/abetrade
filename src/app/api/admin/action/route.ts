@@ -29,8 +29,8 @@ export async function POST(req: Request) {
   // ---- House edge (percent, e.g. 5 => 0.05) ----
   if (action === "set_house_edge") {
     const pct = Number(body.percent);
-    if (!Number.isFinite(pct) || pct < 0 || pct > 15) {
-      return NextResponse.json({ error: "House edge must be between 0 and 15%." }, { status: 400 });
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      return NextResponse.json({ error: "House edge must be between 0 and 100%." }, { status: 400 });
     }
     const edge = await setHouseEdge(pct / 100);
     return NextResponse.json({ ok: true, houseEdge: edge });
@@ -97,6 +97,8 @@ export async function POST(req: Request) {
     if (!rows.length) {
       return NextResponse.json({ error: "User not found or balance would go negative." }, { status: 400 });
     }
+    // Bonus must be wagered before withdrawal — lock it (clawbacks reduce the lock).
+    await sql`UPDATE abetrade_users SET bonus_locked = GREATEST(0, bonus_locked + ${amount}) WHERE id = ${userId}`;
     await sql`
       INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
       VALUES (${userId}, 'bonus', ${amount}, 'completed', 'promo', 'Promotional credit')

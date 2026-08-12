@@ -53,6 +53,7 @@ export type AppUser = {
   status?: string;
   kyc_status?: string;
   kyc_reason?: string | null;
+  bonus_locked?: number;
 };
 
 export type AppConfig = {

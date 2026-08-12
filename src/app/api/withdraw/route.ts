@@ -63,6 +63,25 @@ export async function POST(req: Request) {
   await ensureSchema();
   const sql = db();
 
+  // Bonus funds must be wagered before they can be withdrawn.
+  const lockRows = (await sql`
+    SELECT balance, bonus_locked FROM abetrade_users WHERE id = ${session.id} LIMIT 1
+  `) as Array<{ balance: string | number; bonus_locked: string | number }>;
+  if (lockRows.length) {
+    const bal = Number(lockRows[0].balance);
+    const locked = Number(lockRows[0].bonus_locked || 0);
+    const withdrawable = Math.max(0, bal - locked);
+    if (locked > 0 && amount > withdrawable) {
+      return NextResponse.json(
+        {
+          error: `You must trade your bonus before withdrawing it. $${(locked / 100).toFixed(2)} is still locked — place trades to unlock. Withdrawable now: $${(withdrawable / 100).toFixed(2)}.`,
+          bonusLocked: locked,
+        },
+        { status: 403 }
+      );
+    }
+  }
+
   if (await isBlocked(session.id)) {
     return NextResponse.json(
       { error: "Your account is suspended. Please contact support." },

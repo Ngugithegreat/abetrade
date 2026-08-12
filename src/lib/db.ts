@@ -115,6 +115,9 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`;
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS promo BOOLEAN NOT NULL DEFAULT false`;
 
+  // Bonus funds that must be wagered (staked) before they can be withdrawn.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS bonus_locked BIGINT NOT NULL DEFAULT 0`;
+
   // Referrals: who referred this user, and whether their first-deposit reward paid.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referred_by INTEGER`;
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referral_rewarded BOOLEAN NOT NULL DEFAULT false`;

@@ -34,7 +34,9 @@ export async function GET() {
         (SELECT COUNT(*) FROM abetrade_transactions WHERE type='deposit' AND status='pending') AS deposits_pending,
         (SELECT COUNT(*) FROM abetrade_transactions WHERE type='withdrawal' AND status='pending') AS withdrawals_pending,
         (SELECT COALESCE(SUM(-amount),0) FROM abetrade_transactions WHERE type='trade_stake') AS staked_total,
-        (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='trade_payout') AS payout_total
+        (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='trade_payout') AS payout_total,
+        (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='bonus' AND amount > 0) AS bonus_issued,
+        (SELECT COALESCE(SUM(bonus_locked),0) FROM abetrade_users) AS bonus_locked
     ` as Promise<any[]>,
     sql`
       SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
@@ -88,6 +90,10 @@ export async function GET() {
       stakedTotal: num(k.staked_total),
       payoutTotal: num(k.payout_total),
       houseProfit: num(k.staked_total) - num(k.payout_total),
+      bonusIssued: num(k.bonus_issued),
+      bonusLocked: num(k.bonus_locked),
+      // Real money the company actually holds: deposits in minus withdrawals out.
+      netCash: num(k.deposits_total) - num(k.withdrawals_total),
     },
     daily: daily.map((d) => ({ day: d.day, volume: num(d.volume) })),
     houseEdge, // fraction, e.g. 0.05

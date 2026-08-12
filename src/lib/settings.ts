@@ -3,9 +3,10 @@ import { db, ensureSchema } from "@/lib/db";
 // Runtime, admin-tunable settings kept in the abetrade_settings key/value table.
 
 export const DEFAULT_HOUSE_EDGE = 0.05; // 5%
-// Cap the edge well below the point where even-money payouts collapse to 1.0x
-// (which would make a "win" pay back only the stake). 15% keeps them >= 1.7x.
-export const MAX_HOUSE_EDGE = 0.15;
+// Edge is uncapped for testing (0–100%). A separate payout floor (MIN_PAYOUT_MULT
+// in markets.ts) still guarantees a winner is paid more than the stake, so even a
+// 100% margin never shows a broken $0 win — payouts just hit that floor.
+export const MAX_HOUSE_EDGE = 1;
 const HOUSE_EDGE_KEY = "house_edge";
 
 /** The current house edge as a fraction (0.05 = 5%). Falls back to the default. */

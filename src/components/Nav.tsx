@@ -69,7 +69,7 @@ export function Nav() {
               <span className="tabular text-[10px] text-muted">{user.account_no}</span>
             </div>
           )}
-          <div className="hidden text-right sm:block">
+          <div className="text-right">
             <div className="text-[10px] uppercase tracking-wider text-muted">
               Balance
             </div>
