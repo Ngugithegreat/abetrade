@@ -32,6 +32,36 @@ export async function setHouseEdge(edge: number): Promise<number> {
   return clamped;
 }
 
+// ---- Risk / exposure limits (protect the house bankroll from variance) ----
+export const DEFAULT_MAX_STAKE_CENTS = 50000; // $500 max per trade
+export const DEFAULT_MAX_PAYOUT_CENTS = 200000; // $2,000 max win per trade
+
+async function getIntSetting(key: string, def: number, min: number, max: number): Promise<number> {
+  await ensureSchema();
+  const sql = db();
+  const rows = (await sql`SELECT value FROM abetrade_settings WHERE key = ${key} LIMIT 1`) as Array<{ value: string }>;
+  const v = rows.length ? Math.round(Number(rows[0].value)) : NaN;
+  return Number.isFinite(v) && v >= min && v <= max ? v : def;
+}
+async function setIntSetting(key: string, val: number, min: number, max: number): Promise<number> {
+  await ensureSchema();
+  const sql = db();
+  const clamped = Math.min(max, Math.max(min, Math.round(Number(val) || 0)));
+  await sql`
+    INSERT INTO abetrade_settings (key, value, updated_at)
+    VALUES (${key}, ${String(clamped)}, now())
+    ON CONFLICT (key) DO UPDATE SET value = ${String(clamped)}, updated_at = now()
+  `;
+  return clamped;
+}
+
+/** Max stake allowed on a single trade, in cents. */
+export const getMaxStakeCents = () => getIntSetting("max_stake_cents", DEFAULT_MAX_STAKE_CENTS, 100, 10_000_00);
+export const setMaxStakeCents = (v: number) => setIntSetting("max_stake_cents", v, 100, 10_000_00);
+/** Max payout (total returned) on a single trade, in cents — caps the house's per-trade loss. */
+export const getMaxPayoutCents = () => getIntSetting("max_payout_cents", DEFAULT_MAX_PAYOUT_CENTS, 200, 50_000_00);
+export const setMaxPayoutCents = (v: number) => setIntSetting("max_payout_cents", v, 200, 50_000_00);
+
 export const DEFAULT_REFERRAL_PCT = 0.1; // 10% of the referral's first deposit
 export const REFERRAL_CAP_CENTS = 10000; // never pay more than $100 per referral
 const REFERRAL_PCT_KEY = "referral_pct";

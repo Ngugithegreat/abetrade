@@ -130,6 +130,22 @@ export function AdminView() {
         />
       </div>
 
+      {/* Risk limits — protect the bankroll from big single trades */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <AmountCard
+          title="Max stake per trade"
+          blurb="The biggest amount a player can stake on one trade."
+          value={Number(data.maxStakeCents ?? 50000) / 100}
+          onSave={(usd) => post({ action: "set_max_stake", usd })}
+        />
+        <AmountCard
+          title="Max payout per trade"
+          blurb="The most any single trade can win — caps your loss on one trade."
+          value={Number(data.maxPayoutCents ?? 200000) / 100}
+          onSave={(usd) => post({ action: "set_max_payout", usd })}
+        />
+      </div>
+
       {/* Volume chart */}
       <div className="card p-5">
         <div className="mb-3 text-sm font-bold">Trade volume · last 14 days</div>
@@ -458,6 +474,63 @@ function RateCard({
             className="tabular w-16 bg-transparent text-right text-lg font-bold outline-none"
           />
           <span className="ml-1 text-muted">%</span>
+        </div>
+        <button onClick={save} disabled={saving} className="btn btn-brand px-4 py-2.5 text-sm">
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AmountCard({
+  title,
+  blurb,
+  value,
+  onSave,
+}: {
+  title: string;
+  blurb: string;
+  value: number;
+  onSave: (usd: number) => Promise<Response>;
+}) {
+  const [amt, setAmt] = useState(String(Math.round(value)));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setAmt(String(Math.round(value)));
+  }, [value]);
+
+  async function save() {
+    const v = Number(amt);
+    if (!Number.isFinite(v) || v <= 0) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onSave(v);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <Coins className="h-4 w-4 text-brand" /> {title}
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted">{blurb}</p>
+      <div className="mt-3 flex items-center gap-2">
+        <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
+          <span className="mr-1 text-muted">$</span>
+          <input
+            value={amt}
+            onChange={(e) => setAmt(e.target.value.replace(/[^0-9.]/g, ""))}
+            inputMode="decimal"
+            className="tabular w-24 bg-transparent text-right text-lg font-bold outline-none"
+          />
         </div>
         <button onClick={save} disabled={saving} className="btn btn-brand px-4 py-2.5 text-sm">
           {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}

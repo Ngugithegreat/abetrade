@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { setHouseEdge, setReferralPct } from "@/lib/settings";
+import { setHouseEdge, setReferralPct, setMaxStakeCents, setMaxPayoutCents } from "@/lib/settings";
 import { sendEmail, depositReceiptEmail, kycApprovedEmail, kycRejectedEmail } from "@/lib/email";
 import { payReferralOnDeposit } from "@/lib/referral";
 
@@ -44,6 +44,21 @@ export async function POST(req: Request) {
     }
     const rate = await setReferralPct(pct / 100);
     return NextResponse.json({ ok: true, referralPct: rate });
+  }
+
+  // ---- Risk limits (dollars in the request → stored as cents) ----
+  if (action === "set_max_stake" || action === "set_max_payout") {
+    const usd = Number(body.usd);
+    if (!Number.isFinite(usd) || usd <= 0) {
+      return NextResponse.json({ error: "Enter a valid amount." }, { status: 400 });
+    }
+    const cents = Math.round(usd * 100);
+    if (action === "set_max_stake") {
+      const v = await setMaxStakeCents(cents);
+      return NextResponse.json({ ok: true, maxStakeCents: v });
+    }
+    const v = await setMaxPayoutCents(cents);
+    return NextResponse.json({ ok: true, maxPayoutCents: v });
   }
 
   // ---- Account controls ----

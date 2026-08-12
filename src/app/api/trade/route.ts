@@ -16,7 +16,7 @@ import {
   riseFallMult,
   DigitSubtype,
 } from "@/lib/markets";
-import { getHouseEdge, isBlocked } from "@/lib/settings";
+import { getHouseEdge, isBlocked, getMaxStakeCents, getMaxPayoutCents } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -122,6 +122,24 @@ export async function POST(req: Request) {
   const edge = await getHouseEdge();
   if (kind === "digit") {
     payoutMult = digitPayoutMult(subtype!, direction, barrier!, edge);
+  }
+
+  // Exposure limits protect the house bankroll from a single large trade.
+  const [maxStake, maxPayout] = await Promise.all([getMaxStakeCents(), getMaxPayoutCents()]);
+  if (stake > maxStake) {
+    return NextResponse.json(
+      { error: `Max stake per trade is $${(maxStake / 100).toFixed(0)}.` },
+      { status: 400 }
+    );
+  }
+  if (kind !== "mult") {
+    const mult = kind === "rise_fall" ? riseFallMult(edge) : payoutMult;
+    if (Math.round(stake * mult) > maxPayout) {
+      return NextResponse.json(
+        { error: `That would win more than the $${(maxPayout / 100).toFixed(0)} max per trade — lower your stake.` },
+        { status: 400 }
+      );
+    }
   }
 
   // Entry tick. For DIGIT contracts the entry price is irrelevant to the outcome

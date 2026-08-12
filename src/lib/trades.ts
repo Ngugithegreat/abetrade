@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { getMaxPayoutCents } from "./settings";
 import { getLatestTick, getTickAtOrAfter, Tick } from "./deriv-server";
 import {
   multiplierPnl,
@@ -134,7 +135,8 @@ export async function closeMultiplier(
     stakeCents: stake,
     multiplier: Number(trade.multiplier),
   });
-  const payout = Math.max(0, stake + pnl);
+  const maxPayout = await getMaxPayoutCents();
+  const payout = Math.min(maxPayout, Math.max(0, stake + pnl));
   const status: "won" | "lost" = payout >= stake ? "won" : "lost";
 
   const sql = db();
