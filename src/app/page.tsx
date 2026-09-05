@@ -11,11 +11,19 @@ import {
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LandingChart } from "@/components/LandingChart";
+import { RotatingWord } from "@/components/RotatingWord";
 import { MARKETS, PAYOUT_MULTIPLIER } from "@/lib/markets";
 
 export default function Landing() {
   return (
-    <div className="min-h-screen">
+    <div className="relative isolate min-h-screen overflow-hidden">
+      {/* Ambient animated background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -left-24 top-8 h-96 w-96 rounded-full bg-brand/25 blur-3xl animate-blob" />
+        <div className="absolute -right-24 top-48 h-[30rem] w-[30rem] rounded-full bg-indigo-500/20 blur-3xl animate-blob-slow" />
+        <div className="absolute bottom-24 left-1/3 h-80 w-80 rounded-full bg-fuchsia-500/15 blur-3xl animate-blob [animation-delay:-9s]" />
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent" />
+      </div>
       {/* Header */}
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <div className="flex items-center gap-2">
@@ -42,7 +50,7 @@ export default function Landing() {
           <h1 className="mt-4 text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
             Trade the markets.
             <br />
-            <span className="text-gradient">Simple. Fast. Live.</span>
+            <RotatingWord words={["Simple.", "Fast.", "Live.", "Instant.", "Yours."]} />
           </h1>
           <p className="mt-5 max-w-md text-lg text-muted">
             Predict whether a Volatility Index will rise or fall. Win up to{" "}

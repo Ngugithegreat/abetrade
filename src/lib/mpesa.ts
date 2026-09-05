@@ -183,6 +183,60 @@ export async function stkQuery(
   });
 }
 
+// Live STK state for the UI. `pending` = the prompt is on the phone, waiting for
+// the user to enter their PIN (Daraja returns a "processing" error until then).
+export type StkState =
+  | "pending"
+  | "success"
+  | "cancelled"
+  | "timeout"
+  | "insufficient"
+  | "wrong_pin"
+  | "failed";
+
+const RESULT_MAP: Record<string, { state: StkState; desc: string }> = {
+  "0": { state: "success", desc: "Payment received." },
+  "1032": { state: "cancelled", desc: "You cancelled the request on your phone." },
+  "1037": { state: "timeout", desc: "The prompt timed out — no PIN was entered." },
+  "1": { state: "insufficient", desc: "Insufficient M-Pesa balance." },
+  "2001": { state: "wrong_pin", desc: "Wrong M-Pesa PIN entered." },
+  "1001": { state: "failed", desc: "A transaction is already in process for this number." },
+};
+
+/** Normalised, non-throwing STK status for live polling. */
+export async function stkStatus(
+  checkoutRequestId: string
+): Promise<{ state: StkState; resultCode: string | null; desc: string }> {
+  const shortcode = env("MPESA_SHORTCODE");
+  const passkey = env("MPESA_PASSKEY");
+  const ts = timestamp();
+  const token = await accessToken();
+  const res = await fetch(`${base()}/mpesa/stkpushquery/v1/query`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      BusinessShortCode: shortcode,
+      Password: b64(`${shortcode}${passkey}${ts}`),
+      Timestamp: ts,
+      CheckoutRequestID: checkoutRequestId,
+    }),
+    cache: "no-store",
+  });
+  const json: any = await res.json().catch(() => ({}));
+
+  // Still awaiting the user -> Daraja returns a "being processed" error.
+  const errMsg = String(json?.errorMessage || "").toLowerCase();
+  if (errMsg.includes("process") || json?.errorCode === "500.001.1001") {
+    return { state: "pending", resultCode: null, desc: "Enter your M-Pesa PIN on your phone…" };
+  }
+
+  const code = json?.ResultCode != null ? String(json.ResultCode) : null;
+  const mapped = code ? RESULT_MAP[code] : null;
+  if (mapped) return { state: mapped.state, resultCode: code, desc: mapped.desc };
+  if (code) return { state: "failed", resultCode: code, desc: String(json?.ResultDesc || "Payment failed.") };
+  return { state: "pending", resultCode: null, desc: "Waiting for confirmation…" };
+}
+
 export type B2cResult = {
   ConversationID: string;
   OriginatorConversationID: string;

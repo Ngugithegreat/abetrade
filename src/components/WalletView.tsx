@@ -171,6 +171,112 @@ export function WalletView() {
   );
 }
 
+function StkStatusPanel({
+  data,
+  state,
+  onReset,
+}: {
+  data: { phone: string; amountKes: number };
+  state: { state: string; desc: string };
+  onReset: () => void;
+}) {
+  const s = state.state;
+  const done = s === "success";
+  const failed = ["cancelled", "timeout", "insufficient", "wrong_pin", "failed"].includes(s);
+  const pending = !done && !failed;
+
+  const title = done
+    ? "Payment received"
+    : s === "cancelled"
+    ? "Request cancelled"
+    : s === "timeout"
+    ? "Prompt timed out"
+    : s === "insufficient"
+    ? "Insufficient balance"
+    : s === "wrong_pin"
+    ? "Wrong PIN"
+    : failed
+    ? "Payment failed"
+    : "Waiting for your PIN";
+
+  return (
+    <div className="flex flex-col items-center py-6 text-center">
+      {done ? (
+        <CheckCircle2 className="h-12 w-12 text-up" />
+      ) : failed ? (
+        <XCircle className="h-12 w-12 text-down" />
+      ) : (
+        <div className="relative flex h-14 w-14 items-center justify-center">
+          <Loader2 className="absolute h-14 w-14 animate-spin text-brand/40" />
+          <Smartphone className="h-6 w-6 text-brand" />
+        </div>
+      )}
+
+      <div className="mt-3 text-lg font-bold">{title}</div>
+      <div className="mt-1 max-w-xs text-sm text-muted">
+        {done
+          ? `KES ${data.amountKes.toLocaleString("en-US")} received — your balance is updated.`
+          : state.desc || "Check your phone…"}
+      </div>
+
+      {/* Step tracker */}
+      <div className="mt-5 flex w-full max-w-xs flex-col gap-2 text-left text-xs">
+        <Step label="Prompt sent to your phone" active done />
+        <Step label="Enter your M-Pesa PIN" active={pending || done} done={done} spin={pending} />
+        <Step
+          label={done ? "Payment confirmed" : failed ? title : "Confirming payment"}
+          active={done || failed}
+          done={done}
+          failed={failed}
+        />
+      </div>
+
+      <div className="mt-6 flex gap-2">
+        {(done || failed) && (
+          <button onClick={onReset} className="btn btn-brand px-5 py-2.5 text-sm">
+            {done ? "New deposit" : "Try again"}
+          </button>
+        )}
+        {pending && (
+          <button onClick={onReset} className="btn btn-ghost px-5 py-2.5 text-sm">
+            Cancel
+          </button>
+        )}
+      </div>
+      <div className="mt-3 tabular text-[11px] text-muted">{data.phone}</div>
+    </div>
+  );
+}
+
+function Step({
+  label,
+  active,
+  done,
+  failed,
+  spin,
+}: {
+  label: string;
+  active?: boolean;
+  done?: boolean;
+  failed?: boolean;
+  spin?: boolean;
+}) {
+  return (
+    <div className={`flex items-center gap-2 ${active ? "text-fg" : "text-muted/50"}`}>
+      {done ? (
+        <CheckCircle2 className="h-4 w-4 shrink-0 text-up" />
+      ) : failed ? (
+        <XCircle className="h-4 w-4 shrink-0 text-down" />
+      ) : spin ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand" />
+      ) : (
+        <div className={`h-3.5 w-3.5 shrink-0 rounded-full border ${active ? "border-brand" : "border-border"}`} />
+      )}
+      {label}
+    </div>
+  );
+}
+
 function CryptoDepositPanel({
   data,
   status,
@@ -447,6 +553,8 @@ function MoneyForm({
   const [coin, setCoin] = useState("usdttrc20");
   const [cryptoPay, setCryptoPay] = useState<any | null>(null);
   const [cryptoStatus, setCryptoStatus] = useState<"waiting" | "confirming" | "done" | "failed">("waiting");
+  const [stkPay, setStkPay] = useState<{ checkoutRequestId: string; phone: string; amountKes: number } | null>(null);
+  const [stkState, setStkState] = useState<{ state: string; desc: string }>({ state: "pending", desc: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -464,6 +572,60 @@ function MoneyForm({
     (method === "card" || method === "bank") ? !!config?.cardDeposit : method === "crypto" ? !!config?.cryptoDeposit : false;
   const isHostedDeposit = kind === "deposit" && gatewayReady;
   const showReference = kind === "withdraw" || (kind === "deposit" && !isHostedDeposit);
+
+  // Remember the last phone number (editable). Prefill it for phone methods.
+  useEffect(() => {
+    if (!needsPhone || reference) return;
+    try {
+      const saved = localStorage.getItem("st_phone");
+      if (saved) setReference(saved);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method]);
+
+  function rememberPhone(p: string) {
+    try {
+      localStorage.setItem("st_phone", p);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Live STK status — polls Safaricom so the user sees PIN prompt → paid / cancelled.
+  function pollStk(checkoutRequestId: string) {
+    let n = 0;
+    const id = setInterval(async () => {
+      n += 1;
+      try {
+        const res = await fetch(`/api/mpesa/stk-status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`, {
+          cache: "no-store",
+        });
+        const json = await res.json();
+        setStkState({ state: json.state || "pending", desc: json.desc || "" });
+        if (json.credited) {
+          clearInterval(id);
+          setStkState({ state: "success", desc: "Payment received." });
+          if (typeof json.balance === "number") onDone(json.balance);
+          refresh();
+        } else if (["cancelled", "timeout", "insufficient", "wrong_pin", "failed"].includes(json.state)) {
+          clearInterval(id);
+        }
+      } catch {
+        /* keep polling */
+      }
+      if (n >= 40) clearInterval(id); // ~3 min
+    }, 4500);
+  }
+
+  function resetStk() {
+    setStkPay(null);
+    setStkState({ state: "pending", desc: "" });
+    setAmount("");
+    setMsg(null);
+    refresh();
+  }
 
   // After an automated M-Pesa action, poll the wallet so the status flips from
   // pending to done (or the balance updates) without a manual refresh.
@@ -559,6 +721,12 @@ function MoneyForm({
       const json = await res.json();
       if (!res.ok) {
         setMsg({ text: json.error || "Request failed.", ok: false });
+      } else if (json.mpesa && json.checkoutRequestId) {
+        // M-Pesa: show the live STK status (PIN prompt → paid / cancelled).
+        if (needsPhone) rememberPhone(reference);
+        setStkPay({ checkoutRequestId: json.checkoutRequestId, phone: reference, amountKes: json.amountKes });
+        setStkState({ state: "pending", desc: "Sent to your phone — enter your M-Pesa PIN…" });
+        pollStk(json.checkoutRequestId);
       } else if (json.crypto) {
         // Crypto: show the deposit address and poll until it confirms on-chain.
         setCryptoPay(json.crypto);
@@ -571,9 +739,9 @@ function MoneyForm({
         return;
       } else if (json.poll && json.ref) {
         // MTN / Airtel prompt sent — poll until confirmed.
+        if (needsPhone) rememberPhone(reference);
         setMsg({ text: json.message || "Approve the prompt on your phone.", ok: true });
         setAmount("");
-        setReference("");
         pollCollecto(json.ref);
       } else {
         const fallback =
@@ -593,6 +761,9 @@ function MoneyForm({
     }
   }
 
+  if (stkPay) {
+    return <StkStatusPanel data={stkPay} state={stkState} onReset={resetStk} />;
+  }
   if (cryptoPay) {
     return <CryptoDepositPanel data={cryptoPay} status={cryptoStatus} onReset={resetCrypto} />;
   }

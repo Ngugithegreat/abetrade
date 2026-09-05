@@ -99,6 +99,7 @@ export async function POST(req: Request) {
         ok: true,
         mpesa: true,
         amountKes,
+        checkoutRequestId: stk.CheckoutRequestID,
         transaction: rows[0],
         message: "Check your phone and enter your M-Pesa PIN to complete the deposit.",
       });
