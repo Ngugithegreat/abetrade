@@ -2,11 +2,13 @@
 
 import { AppProvider } from "@/components/app-context";
 import { Nav } from "@/components/Nav";
+import { AppBackground } from "@/components/AppBackground";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppProvider>
-      <div className="min-h-screen">
+      <div className="relative isolate min-h-screen">
+        <AppBackground />
         <Nav />
         {/* Each page owns its own container so the trade dashboard can go
             full-width and fit the viewport while other pages stay centered. */}
