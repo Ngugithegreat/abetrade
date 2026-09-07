@@ -66,6 +66,7 @@ export type AppConfig = {
   ugMobileDeposit: boolean;
   usdKesRate: number;
   usdUgxRate: number;
+  globalTest?: boolean;
 };
 
 export type Referral = {

@@ -104,6 +104,13 @@ export function AdminView() {
 
   return (
     <div className="space-y-5">
+      {/* Global test mode */}
+      <GlobalTestCard
+        on={!!data.globalTest}
+        pct={Number(data.globalTestPct ?? 50)}
+        onSave={(on, pct) => post({ action: "set_global_test", on, pct })}
+      />
+
       {/* Cash-position KPIs — the numbers that tell you if the company is up */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi icon={Landmark} label="Net cash (real money)" value={money(k.netCash ?? 0, { sign: true })} sub="deposits − withdrawals" accent={(k.netCash ?? 0) >= 0 ? "up" : "down"} />
@@ -496,6 +503,79 @@ function RateCard({
 // Projection-only calculator: shows how house profit moves with win rate, edge,
 // stake and volume. It NEVER touches live trades — it just does the math so you
 // can see how a broker makes money. Safe to keep in production (it's read-only).
+function GlobalTestCard({
+  on,
+  pct,
+  onSave,
+}: {
+  on: boolean;
+  pct: number;
+  onSave: (on: boolean, pct: number) => Promise<Response>;
+}) {
+  const [p, setP] = useState(pct);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setP(pct), [pct]);
+
+  async function save(nextOn: boolean, nextPct: number) {
+    setBusy(true);
+    try {
+      await onSave(nextOn, nextPct);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`card p-5 ${on ? "border-gold/50" : ""}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold">🧪 Global test mode</div>
+          <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
+            Puts the <b>whole system</b> on simulated data — anyone who logs in trades a fake market
+            whose wins/losses are rolled at the % below. No whitelisting needed. <b>Turn OFF before
+            going live</b> to switch everyone back to the real market.
+          </p>
+        </div>
+        <button
+          onClick={() => save(!on, p)}
+          disabled={busy}
+          className={`relative h-8 w-14 shrink-0 rounded-full transition ${on ? "bg-up" : "bg-border"}`}
+          title={on ? "Turn off" : "Turn on"}
+        >
+          <span className={`absolute top-1 h-6 w-6 rounded-full bg-white transition-all ${on ? "left-7" : "left-1"}`} />
+        </button>
+      </div>
+
+      {on && (
+        <div className="mt-4 rounded-xl border border-gold/40 bg-gold/10 p-3">
+          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gold">
+            ⚠️ System is in TEST MODE — simulated data, not real trades
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted">Everyone wins</span>
+            <span className="tabular font-bold">{p}% / loses {100 - p}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={p}
+            onChange={(e) => setP(Number(e.target.value))}
+            onMouseUp={() => save(true, p)}
+            onTouchEnd={() => save(true, p)}
+            className="mt-1 w-full accent-[color:rgb(var(--brand))]"
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-muted">
+            <span>always lose</span>
+            <span>50/50</span>
+            <span>always win</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TestAccountsCard({
   accounts,
   onAction,

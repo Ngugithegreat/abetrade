@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { setHouseEdge, setReferralPct, setMaxStakeCents, setMaxPayoutCents } from "@/lib/settings";
+import { setHouseEdge, setReferralPct, setMaxStakeCents, setMaxPayoutCents, setGlobalTest, setGlobalTestPct } from "@/lib/settings";
 import { sendEmail, depositReceiptEmail, kycApprovedEmail, kycRejectedEmail } from "@/lib/email";
 import { payReferralOnDeposit } from "@/lib/referral";
 
@@ -59,6 +59,15 @@ export async function POST(req: Request) {
     }
     const v = await setMaxPayoutCents(cents);
     return NextResponse.json({ ok: true, maxPayoutCents: v });
+  }
+
+  // ---- Global test mode: whole system on simulated data at a set win % ----
+  if (action === "set_global_test") {
+    const on = !!body.on;
+    const pct = Math.min(100, Math.max(0, Math.round(Number(body.pct ?? 50))));
+    await setGlobalTest(on);
+    await setGlobalTestPct(pct);
+    return NextResponse.json({ ok: true, globalTest: on, globalTestPct: pct });
   }
 
   // ---- Test accounts (QA): enable/disable Force Win/Lose for an email ----

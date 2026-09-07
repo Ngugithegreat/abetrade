@@ -16,7 +16,7 @@ import {
   riseFallMult,
   DigitSubtype,
 } from "@/lib/markets";
-import { getHouseEdge, isBlocked, getMaxStakeCents, getMaxPayoutCents } from "@/lib/settings";
+import { getHouseEdge, isBlocked, getMaxStakeCents, getMaxPayoutCents, getGlobalTest, getGlobalTestPct } from "@/lib/settings";
 import { isTestEmail } from "@/lib/testmode";
 
 export const runtime = "nodejs";
@@ -121,16 +121,23 @@ export async function POST(req: Request) {
   // Test harness: honour a forced win/lose ONLY for whitelisted TEST_EMAILS
   // accounts and only for time-settled contracts. Never trusts the client flag.
   let forcedOutcome: string | null = null;
-  if (body.testMode && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
-    const ur = (await sql`SELECT email, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
-      email: string;
-      is_test: boolean;
-      test_win_pct: number;
-    }>;
-    if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) {
-      // Test account: roll the outcome against the admin-set win rate.
-      const pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
+  if (kind === "rise_fall" || kind === "digit" || kind === "mult") {
+    const globalTest = await getGlobalTest();
+    if (globalTest) {
+      // Whole system in test mode: every trade rolls at the global win rate.
+      const pct = await getGlobalTestPct();
       forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
+    } else if (body.testMode) {
+      // Per-account test whitelist: roll at that account's win rate.
+      const ur = (await sql`SELECT email, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
+        email: string;
+        is_test: boolean;
+        test_win_pct: number;
+      }>;
+      if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) {
+        const pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
+        forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
+      }
     }
   }
 
@@ -192,8 +199,7 @@ export async function POST(req: Request) {
   }
   const newBalance = Number(debit[0].balance);
 
-  // Every dollar staked works off any locked bonus (1x wagering to unlock).
-  await sql`UPDATE abetrade_users SET bonus_locked = GREATEST(0, bonus_locked - ${stake}) WHERE id = ${session.id}`;
+  // Bonus funds are trade-only and stay locked — they can never be withdrawn.
 
   let rows: any[];
   if (kind === "rise_fall") {

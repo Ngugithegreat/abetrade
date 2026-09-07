@@ -3,6 +3,7 @@ import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { accountNo } from "@/lib/format";
 import { isTestEmail } from "@/lib/testmode";
+import { getGlobalTest } from "@/lib/settings";
 import { referralStats } from "@/lib/referral";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
@@ -38,6 +39,7 @@ export async function GET() {
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status != 'open' ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
     referralStats(session.id),
   ]);
+  const globalTest = await getGlobalTest();
 
   const u = userRows[0];
   return NextResponse.json({
@@ -65,6 +67,7 @@ export async function GET() {
       ugMobileDeposit: isCollectoConfigured(),
       usdKesRate: usdKesRate(),
       usdUgxRate: usdUgxRate(),
+      globalTest,
     },
   });
 }

@@ -56,6 +56,14 @@ async function setIntSetting(key: string, val: number, min: number, max: number)
   return clamped;
 }
 
+// Global test mode: puts the WHOLE system on simulated data with outcomes rolled
+// at an admin-set win %. Every logged-in user tests without being whitelisted.
+// Turn OFF before going live.
+export const getGlobalTest = async () => (await getIntSetting("global_test", 0, 0, 1)) === 1;
+export const setGlobalTest = (on: boolean) => setIntSetting("global_test", on ? 1 : 0, 0, 1);
+export const getGlobalTestPct = () => getIntSetting("global_test_pct", 50, 0, 100);
+export const setGlobalTestPct = (v: number) => setIntSetting("global_test_pct", v, 0, 100);
+
 /** Max stake allowed on a single trade, in cents. */
 export const getMaxStakeCents = () => getIntSetting("max_stake_cents", DEFAULT_MAX_STAKE_CENTS, 100, 10_000_00);
 export const setMaxStakeCents = (v: number) => setIntSetting("max_stake_cents", v, 100, 10_000_00);

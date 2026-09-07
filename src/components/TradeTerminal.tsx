@@ -71,7 +71,7 @@ function beep() {
 }
 
 export function TradeTerminal() {
-  const { balance, setBalance, data, refresh, loading, user } = useApp();
+  const { balance, setBalance, data, refresh, loading, user, config } = useApp();
   const [symbol, setSymbol] = useState("1HZ100V");
   const [contract, setContract] = useState<Contract>("digit");
   const [stake, setStake] = useState("10");
@@ -90,7 +90,8 @@ export function TradeTerminal() {
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
 
-  const sim = !!user?.isTest; // testers get a controlled, steerable sim market
+  // Sim market when this account is a tester OR the whole system is in test mode.
+  const sim = !!user?.isTest || !!config?.globalTest;
   const realFeed = useDerivFeed(symbol, !sim);
   const testFeed = useTestFeed(symbol, sim);
   const feed = sim ? testFeed : realFeed;
@@ -234,7 +235,7 @@ export function TradeTerminal() {
       // Test accounts trade the SIM market: send the sim's current price as the
       // entry (all contract types, so the entry line matches the chart) and flag
       // test mode so the server rolls the outcome by the admin win %.
-      if (user?.isTest) {
+      if (sim) {
         body.testMode = true;
         if (feed.last) body.entry = { price: feed.last.price, epoch: feed.last.epoch };
       }
