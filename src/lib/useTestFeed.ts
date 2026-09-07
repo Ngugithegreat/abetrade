@@ -14,7 +14,7 @@ export type TestFeedState = {
   last: Point | null;
   prev: Point | null;
   connected: boolean;
-  steer: (target: number, deadlineEpoch: number) => void;
+  steer: (target: number, deadlineEpoch: number, exact?: boolean) => void;
 };
 
 // Plausible starting levels so the sim looks like the real indices.
@@ -26,7 +26,7 @@ const BASE: Record<string, number> = {
 export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
   const [points, setPoints] = useState<Point[]>([]);
   const priceRef = useRef(0);
-  const steerRef = useRef<{ target: number; deadline: number } | null>(null);
+  const steerRef = useRef<{ target: number; deadline: number; exact: boolean } | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -57,14 +57,17 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
       if (st) {
         const timeLeft = st.deadline - nowSec;
         if (timeLeft <= 0) {
-          // Land exactly on target at/after the deadline, then release.
-          next = st.target;
+          // Deadline reached. Digits need the exact target (last digit matters);
+          // Rise/Fall/Mult just need to land near the target with normal wobble.
+          next = st.exact ? st.target : st.target + (Math.random() - 0.5) * vol * 0.6;
           steerRef.current = null;
         } else {
-          // Pull toward target, stronger as the deadline nears, plus some noise.
-          const pull = (st.target - cur) / Math.max(1, timeLeft);
-          const noise = (Math.random() - 0.5) * 2 * vol * Math.min(1, timeLeft / 6);
-          next = cur + pull + noise;
+          // Mean-reverting drift toward target (grows as the deadline nears) PLUS
+          // full-size noise, so it wanders up and down like a real market while
+          // still trending to the outcome — not a straight glide.
+          const drift = (st.target - cur) * (0.18 + 0.6 / Math.max(1, timeLeft));
+          const noise = (Math.random() - 0.5) * 2 * vol;
+          next = cur + drift + noise;
         }
       } else {
         next = cur + (Math.random() - 0.5) * 2 * vol;
@@ -83,8 +86,8 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
     last,
     prev,
     connected: enabled,
-    steer: (target, deadline) => {
-      steerRef.current = { target, deadline };
+    steer: (target, deadline, exact = false) => {
+      steerRef.current = { target, deadline, exact };
     },
   };
 }

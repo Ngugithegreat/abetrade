@@ -89,7 +89,6 @@ export function TradeTerminal() {
   const alertPrevRef = useRef<number | null>(null);
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
-  const [testOutcome, setTestOutcome] = useState<"real" | "auto" | "win" | "lose">("auto");
 
   const sim = !!user?.isTest; // testers get a controlled, steerable sim market
   const realFeed = useDerivFeed(symbol, !sim);
@@ -198,14 +197,14 @@ export function TradeTerminal() {
       const scaleD = Math.pow(10, dp);
       let scaled = Math.round(entry * scaleD);
       scaled = scaled - (((scaled % 10) + 10) % 10) + d; // set last digit to d
-      testFeed.steer(scaled / scaleD, Number(t.expiry_epoch) || nowSec + digitTicks);
+      testFeed.steer(scaled / scaleD, Number(t.expiry_epoch) || nowSec + digitTicks, true);
     } else {
       const up = t.direction === "rise" || t.direction === "up";
       const wantHigher = (up && won) || (!up && !won);
       const delta = Math.max(0.02, Math.abs(entry) * 0.004);
       const target = wantHigher ? entry + delta : entry - delta;
       const deadline = Number(t.expiry_epoch) > nowSec ? Number(t.expiry_epoch) : nowSec + 25;
-      testFeed.steer(target, deadline);
+      testFeed.steer(target, deadline, false);
     }
   }
 
@@ -232,9 +231,13 @@ export function TradeTerminal() {
           entry: feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : undefined,
           ...extra,
         };
-      // Test harness (whitelisted accounts only): always tell the server the
-      // chosen mode — "auto" rolls at the admin win %, real/win/lose as labelled.
-      if (user?.isTest) body.testOutcome = testOutcome;
+      // Test accounts trade the SIM market: send the sim's current price as the
+      // entry (all contract types, so the entry line matches the chart) and flag
+      // test mode so the server rolls the outcome by the admin win %.
+      if (user?.isTest) {
+        body.testMode = true;
+        if (feed.last) body.entry = { price: feed.last.price, epoch: feed.last.epoch };
+      }
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -444,44 +447,6 @@ export function TradeTerminal() {
                 </button>
               ))}
             </div>
-
-            {user?.isTest && (
-              <div className="mb-3 rounded-xl border border-gold/40 bg-gold/10 p-2">
-                <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gold">
-                  <span>🧪 Test mode · controls this trade’s result</span>
-                  {testOutcome === "auto" && (
-                    <span className="normal-case">win {user.testWinPct ?? 50}% / lose {100 - (user.testWinPct ?? 50)}%</span>
-                  )}
-                </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(
-                    [
-                      ["real", "Real"],
-                      ["auto", `Auto ${user.testWinPct ?? 50}%`],
-                      ["win", "Win"],
-                      ["lose", "Lose"],
-                    ] as [typeof testOutcome, string][]
-                  ).map(([o, label]) => (
-                    <button
-                      key={o}
-                      onClick={() => setTestOutcome(o)}
-                      className={`btn px-1 py-1.5 text-[10px] ${
-                        testOutcome === o && o !== "win" && o !== "lose" ? "btn-brand" : "btn-ghost"
-                      } ${testOutcome === o && (o === "win" || o === "lose") ? "text-white" : ""}`}
-                      style={
-                        testOutcome === o && o === "win"
-                          ? { background: "linear-gradient(180deg,#00e3a0,#00b87e)" }
-                          : testOutcome === o && o === "lose"
-                          ? { background: "linear-gradient(180deg,#ff5b6a,#e13b4b)" }
-                          : undefined
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-muted">Stake (USD)</label>

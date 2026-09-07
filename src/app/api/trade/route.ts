@@ -121,21 +121,16 @@ export async function POST(req: Request) {
   // Test harness: honour a forced win/lose ONLY for whitelisted TEST_EMAILS
   // accounts and only for time-settled contracts. Never trusts the client flag.
   let forcedOutcome: string | null = null;
-  const wanted = String(body.testOutcome || "");
-  if (["win", "lose", "auto"].includes(wanted) && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
+  if (body.testMode && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
     const ur = (await sql`SELECT email, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
       email: string;
       is_test: boolean;
       test_win_pct: number;
     }>;
     if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) {
-      if (wanted === "win" || wanted === "lose") {
-        forcedOutcome = wanted;
-      } else {
-        // Auto: roll a win/lose against the admin-set win rate.
-        const pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
-        forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
-      }
+      // Test account: roll the outcome against the admin-set win rate.
+      const pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
+      forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
     }
   }
 
@@ -164,8 +159,10 @@ export async function POST(req: Request) {
   let entry: { price: number; epoch: number } | undefined;
   const nowSec = Math.floor(Date.now() / 1000);
   const ce = body.entry;
+  // Digits (entry irrelevant to outcome) and TEST accounts (chart is the sim, so
+  // entry must come from the sim price the client shows) use the client tick.
   if (
-    kind === "digit" &&
+    (kind === "digit" || forcedOutcome) &&
     ce &&
     Number.isFinite(Number(ce.price)) &&
     Number.isFinite(Number(ce.epoch)) &&
