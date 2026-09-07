@@ -49,12 +49,16 @@ export async function GET() {
       SELECT u.id, u.name, u.email, u.balance, u.status, u.promo, u.created_at,
         COALESCE(SUM(CASE WHEN t.status='won' THEN t.payout - t.stake
                           WHEN t.status='lost' THEN -t.stake ELSE 0 END),0) AS pnl,
-        COUNT(t.id) FILTER (WHERE t.status != 'open') AS trades
+        COUNT(t.id) FILTER (WHERE t.status != 'open') AS trades,
+        COALESCE((SELECT SUM(x.amount) FROM abetrade_transactions x
+                   WHERE x.user_id = u.id AND x.type='deposit' AND x.status='completed'),0) AS deposited,
+        COALESCE((SELECT SUM(-x.amount) FROM abetrade_transactions x
+                   WHERE x.user_id = u.id AND x.type='withdrawal' AND x.status<>'rejected'),0) AS withdrawn
       FROM abetrade_users u
       LEFT JOIN abetrade_trades t ON t.user_id = u.id
       GROUP BY u.id
-      ORDER BY trades DESC NULLS LAST, u.created_at DESC
-      LIMIT 40
+      ORDER BY u.created_at DESC
+      LIMIT 100
     ` as Promise<any[]>,
     sql`
       SELECT id, name, email, kyc_name, kyc_id_number, kyc_phone, kyc_submitted_at
@@ -128,6 +132,8 @@ export async function GET() {
       balance: num(u.balance),
       pnl: num(u.pnl),
       trades: num(u.trades),
+      deposited: num(u.deposited),
+      withdrawn: num(u.withdrawn),
     })),
   });
 }

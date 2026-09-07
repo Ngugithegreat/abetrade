@@ -73,6 +73,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, maxPayoutCents: v });
   }
 
+  // ---- Reset all financial data (pre-launch clean slate) ----
+  if (action === "reset_data") {
+    await sql`DELETE FROM abetrade_trades`;
+    await sql`DELETE FROM abetrade_transactions`;
+    await sql`UPDATE abetrade_users SET balance = 0, bonus_locked = 0, referral_rewarded = false`;
+    return NextResponse.json({ ok: true });
+  }
+
   // ---- Global test mode: whole system on simulated data at a set win % ----
   if (action === "set_global_test") {
     const on = !!body.on;

@@ -44,6 +44,8 @@ type Player = {
   balance: number;
   pnl: number;
   trades: number;
+  deposited: number;
+  withdrawn: number;
 };
 
 export function AdminView() {
@@ -280,8 +282,8 @@ export function AdminView() {
       {/* Player management */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <span className="font-bold">Players &amp; accounts</span>
-          <span className="text-[11px] text-muted">Block abusers · grant promo credit · flag promo accounts</span>
+          <span className="font-bold">Users &amp; accounts ({players.length})</span>
+          <span className="text-[11px] text-muted">Balance · real deposits · withdrawals · manage</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -289,8 +291,10 @@ export function AdminView() {
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted">
                 <th className="px-5 py-2 font-medium">Account</th>
                 <th className="px-3 py-2 text-right font-medium">Balance</th>
+                <th className="px-3 py-2 text-right font-medium">Deposited</th>
+                <th className="px-3 py-2 text-right font-medium">Withdrawn</th>
                 <th className="px-3 py-2 text-right font-medium">Trades</th>
-                <th className="px-3 py-2 text-right font-medium">Player P&amp;L</th>
+                <th className="px-3 py-2 text-right font-medium">P&amp;L</th>
                 <th className="px-5 py-2 text-right font-medium">Manage</th>
               </tr>
             </thead>
@@ -300,6 +304,30 @@ export function AdminView() {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Danger zone */}
+      <div className="card border border-down/30 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-down">Danger zone · reset for launch</div>
+            <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
+              Wipes all test activity: deletes every trade and transaction and resets every balance to
+              $0. Users keep their logins. After this, Deposits shows $0 so any real deposit stands out.
+              This can’t be undone.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              if (window.confirm("Delete ALL trades & transactions and reset every balance to $0? This cannot be undone.")) {
+                post({ action: "reset_data" });
+              }
+            }}
+            className="btn btn-ghost shrink-0 border border-down/40 px-4 py-2.5 text-sm text-down"
+          >
+            Reset all data
+          </button>
         </div>
       </div>
     </div>
@@ -348,6 +376,8 @@ function PlayerRow({
         <div className="tabular text-[11px] text-muted">{u.account_no} · {u.email}</div>
       </td>
       <td className="tabular px-3 py-2.5 text-right text-brand">{money(u.balance)}</td>
+      <td className={`tabular px-3 py-2.5 text-right ${u.deposited > 0 ? "text-up" : "text-muted"}`}>{money(u.deposited)}</td>
+      <td className="tabular px-3 py-2.5 text-right text-muted">{money(u.withdrawn)}</td>
       <td className="tabular px-3 py-2.5 text-right">{u.trades}</td>
       <td className={`tabular px-3 py-2.5 text-right font-bold ${u.pnl >= 0 ? "text-up" : "text-down"}`}>
         {money(u.pnl, { sign: true })}
