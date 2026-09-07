@@ -85,7 +85,9 @@ export function TradeTerminal() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [alertPrice, setAlertPrice] = useState<number | null>(null);
   const alertPrevRef = useRef<number | null>(null);
-  const [testOutcome, setTestOutcome] = useState<"real" | "auto" | "win" | "lose">("real");
+  // Testers default to "auto" so the admin-set win % governs every trade
+  // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
+  const [testOutcome, setTestOutcome] = useState<"real" | "auto" | "win" | "lose">("auto");
 
   const feed = useDerivFeed(symbol);
   const markets = useDerivMarkets(MARKETS.map((m) => m.symbol));
@@ -198,8 +200,9 @@ export function TradeTerminal() {
           entry: feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : undefined,
           ...extra,
         };
-      // Test harness (whitelisted accounts only): force/roll this trade's outcome.
-      if (user?.isTest && testOutcome !== "real") body.testOutcome = testOutcome;
+      // Test harness (whitelisted accounts only): always tell the server the
+      // chosen mode — "auto" rolls at the admin win %, real/win/lose as labelled.
+      if (user?.isTest) body.testOutcome = testOutcome;
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
