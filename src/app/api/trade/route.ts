@@ -123,21 +123,19 @@ export async function POST(req: Request) {
   let forcedOutcome: string | null = null;
   if (kind === "rise_fall" || kind === "digit" || kind === "mult") {
     const globalTest = await getGlobalTest();
-    if (globalTest) {
-      // Whole system in test mode: every trade rolls at the global win rate.
-      const pct = await getGlobalTestPct();
-      forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
-    } else if (body.testMode) {
-      // Per-account test whitelist: roll at that account's win rate.
+    if (globalTest || body.testMode) {
+      // A whitelisted account always uses ITS OWN win % (even in global mode);
+      // everyone else uses the global win % when global test mode is on.
       const ur = (await sql`SELECT email, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
         email: string;
         is_test: boolean;
         test_win_pct: number;
       }>;
-      if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) {
-        const pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
-        forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
-      }
+      const perEmail = ur.length && (ur[0].is_test || isTestEmail(ur[0].email));
+      let pct: number | null = null;
+      if (perEmail) pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
+      else if (globalTest) pct = await getGlobalTestPct();
+      if (pct !== null) forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
     }
   }
 
