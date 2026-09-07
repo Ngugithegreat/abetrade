@@ -255,22 +255,6 @@ export function AdminView() {
         </div>
       </div>
 
-      {/* Reset deposit ledger */}
-      <div className="card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm font-bold">Reset deposit history</div>
-          <button
-            onClick={() => {
-              if (window.confirm("Clear all deposit records and set the Deposits total to $0? (Balances are not changed.)")) {
-                post({ action: "reset_deposits" });
-              }
-            }}
-            className="btn btn-ghost shrink-0 border border-border px-4 py-2.5 text-sm"
-          >
-            Reset deposits
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

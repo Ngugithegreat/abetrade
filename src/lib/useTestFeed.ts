@@ -14,7 +14,7 @@ export type TestFeedState = {
   last: Point | null;
   prev: Point | null;
   connected: boolean;
-  steer: (target: number, deadlineEpoch: number, exact?: boolean) => void;
+  steer: (target: number, deadlineEpoch: number, exact?: boolean, entry?: number) => void;
 };
 
 // Plausible starting levels so the sim looks like the real indices.
@@ -26,7 +26,13 @@ const BASE: Record<string, number> = {
 export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
   const [points, setPoints] = useState<Point[]>([]);
   const priceRef = useRef(0);
-  const steerRef = useRef<{ target: number; deadline: number; exact: boolean } | null>(null);
+  const steerRef = useRef<{
+    target: number;
+    deadline: number;
+    exact: boolean;
+    entry: number;
+    start: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -61,13 +67,39 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
           // Rise/Fall/Mult just need to land near the target with normal wobble.
           next = st.exact ? st.target : st.target + (Math.random() - 0.5) * vol * 0.6;
           steerRef.current = null;
-        } else {
-          // Mean-reverting drift toward target (grows as the deadline nears) PLUS
-          // full-size noise, so it wanders up and down like a real market while
-          // still trending to the outcome — not a straight glide.
+        } else if (st.exact) {
+          // Digits: drift straight to the exact target (no tease — the last digit
+          // is what settles it), still with full noise so it looks alive.
           const drift = (st.target - cur) * (0.18 + 0.6 / Math.max(1, timeLeft));
+          next = cur + drift + (Math.random() - 0.5) * 2 * vol;
+        } else {
+          // Rise/Fall & Multipliers: make the trade feel real. Even a trade that
+          // WILL win first teases toward the losing side, then swings back and
+          // closes clearly on the winning side (and vice-versa for a loss). We
+          // aim at a moving target: an early excursion to the opposite side of
+          // entry, then a convergence to the final side — all with live noise.
+          const span = Math.max(1, st.deadline - st.start);
+          const prog = Math.min(1, Math.max(0, (nowSec - st.start) / span));
+          const dir = st.target >= st.entry ? 1 : -1; // final winning direction
+          const finalMag = Math.max(Math.abs(st.target - st.entry), vol * 5);
+          const finalTarget = st.entry + dir * finalMag; // clearly the winning side
+          const teaseTarget = st.entry - dir * finalMag * 1.3; // excursion the other way
+          const TEASE = 0.55; // fraction of the trade spent teasing the wrong way
+          let aim: number;
+          if (prog < TEASE) {
+            const p = prog / TEASE;
+            const e = 1 - (1 - p) * (1 - p); // easeOut
+            aim = st.entry + (teaseTarget - st.entry) * e;
+          } else {
+            const p = (prog - TEASE) / (1 - TEASE);
+            const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOut
+            aim = teaseTarget + (finalTarget - teaseTarget) * e;
+          }
+          // Drift toward the moving aim, tightening as the deadline nears, plus
+          // full-size noise so the path never looks like a clean glide.
+          const driftK = Math.min(0.85, 0.22 + 0.6 * (1 - timeLeft / span));
           const noise = (Math.random() - 0.5) * 2 * vol;
-          next = cur + drift + noise;
+          next = cur + (aim - cur) * driftK + noise;
         }
       } else {
         next = cur + (Math.random() - 0.5) * 2 * vol;
@@ -86,8 +118,14 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
     last,
     prev,
     connected: enabled,
-    steer: (target, deadline, exact = false) => {
-      steerRef.current = { target, deadline, exact };
+    steer: (target, deadline, exact = false, entry?) => {
+      steerRef.current = {
+        target,
+        deadline,
+        exact,
+        entry: entry ?? priceRef.current,
+        start: Math.floor(Date.now() / 1000),
+      };
     },
   };
 }

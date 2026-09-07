@@ -198,14 +198,14 @@ export function TradeTerminal() {
       const scaleD = Math.pow(10, dp);
       let scaled = Math.round(entry * scaleD);
       scaled = scaled - (((scaled % 10) + 10) % 10) + d; // set last digit to d
-      testFeed.steer(scaled / scaleD, Number(t.expiry_epoch) || nowSec + digitTicks, true);
+      testFeed.steer(scaled / scaleD, Number(t.expiry_epoch) || nowSec + digitTicks, true, entry);
     } else {
       const up = t.direction === "rise" || t.direction === "up";
       const wantHigher = (up && won) || (!up && !won);
       const delta = Math.max(0.02, Math.abs(entry) * 0.004);
       const target = wantHigher ? entry + delta : entry - delta;
       const deadline = Number(t.expiry_epoch) > nowSec ? Number(t.expiry_epoch) : nowSec + 25;
-      testFeed.steer(target, deadline, false);
+      testFeed.steer(target, deadline, false, entry);
     }
   }
 
@@ -537,6 +537,15 @@ export function TradeTerminal() {
                 baseStakeCents={stakeCents}
                 stakeValid={stakeValid}
                 markets={markets}
+                sim={sim}
+                getSimEntry={() =>
+                  feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : null
+                }
+                onSimTrade={(t) => {
+                  // Show the bot's trade play out on the sim chart when it's on
+                  // the market currently displayed.
+                  if (sim && t?.forced_outcome && t.symbol === symbol) steerToOutcome(t);
+                }}
                 setBalance={setBalance}
                 refresh={refresh}
                 showToast={showToast}

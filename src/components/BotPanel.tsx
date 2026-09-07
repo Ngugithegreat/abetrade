@@ -29,6 +29,9 @@ export function BotPanel({
   baseStakeCents,
   stakeValid,
   markets,
+  sim,
+  getSimEntry,
+  onSimTrade,
   setBalance,
   refresh,
   showToast,
@@ -42,6 +45,9 @@ export function BotPanel({
   baseStakeCents: number;
   stakeValid: boolean;
   markets: Record<string, MarketTick>;
+  sim?: boolean;
+  getSimEntry?: () => { price: number; epoch: number } | null;
+  onSimTrade?: (trade: any) => void;
   setBalance: (b: number) => void;
   refresh: () => void;
   showToast: (m: string, ok: boolean) => void;
@@ -104,6 +110,18 @@ export function BotPanel({
           : { kind: "digit", symbol, direction: side, stake: stakeCents, subtype, barrier, ticks };
     }
 
+    // In test/sim mode, flag the trade so the server rolls the outcome by the
+    // admin win % (same as manual test trades). When the trade is on the market
+    // currently on-screen, send the sim's price as entry so the chart line and
+    // the trade match.
+    if (sim) {
+      body.testMode = true;
+      if (getSimEntry && body.symbol === symbol) {
+        const e = getSimEntry();
+        if (e) body.entry = e;
+      }
+    }
+
     const res = await fetch("/api/trade", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -113,6 +131,9 @@ export function BotPanel({
     if (!res.ok) return { error: j.error || "Trade failed." };
     if (typeof j.balance === "number") setBalance(j.balance);
     const trade = j.trade;
+
+    // Let the terminal play the bot's trade out on the sim chart.
+    if (sim && onSimTrade) onSimTrade(trade);
 
     const expiryMs = Number(trade.expiry_epoch) * 1000;
     while (Date.now() < expiryMs + 400) {
