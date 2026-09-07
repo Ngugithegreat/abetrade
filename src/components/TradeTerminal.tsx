@@ -85,7 +85,7 @@ export function TradeTerminal() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [alertPrice, setAlertPrice] = useState<number | null>(null);
   const alertPrevRef = useRef<number | null>(null);
-  const [testOutcome, setTestOutcome] = useState<"off" | "win" | "lose">("off");
+  const [testOutcome, setTestOutcome] = useState<"real" | "auto" | "win" | "lose">("real");
 
   const feed = useDerivFeed(symbol);
   const markets = useDerivMarkets(MARKETS.map((m) => m.symbol));
@@ -198,8 +198,8 @@ export function TradeTerminal() {
           entry: feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : undefined,
           ...extra,
         };
-      // Test harness (whitelisted accounts only): force this trade's outcome.
-      if (user?.isTest && testOutcome !== "off") body.testOutcome = testOutcome;
+      // Test harness (whitelisted accounts only): force/roll this trade's outcome.
+      if (user?.isTest && testOutcome !== "real") body.testOutcome = testOutcome;
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -410,23 +410,27 @@ export function TradeTerminal() {
 
             {user?.isTest && (
               <div className="mb-3 rounded-xl border border-gold/40 bg-gold/10 p-2">
-                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gold">
-                  🧪 Test mode · forces the next trade’s result
+                <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gold">
+                  <span>🧪 Test mode · controls this trade’s result</span>
+                  {testOutcome === "auto" && (
+                    <span className="normal-case">win {user.testWinPct ?? 50}% / lose {100 - (user.testWinPct ?? 50)}%</span>
+                  )}
                 </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(["off", "win", "lose"] as const).map((o) => (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {(
+                    [
+                      ["real", "Real"],
+                      ["auto", `Auto ${user.testWinPct ?? 50}%`],
+                      ["win", "Win"],
+                      ["lose", "Lose"],
+                    ] as [typeof testOutcome, string][]
+                  ).map(([o, label]) => (
                     <button
                       key={o}
                       onClick={() => setTestOutcome(o)}
-                      className={`btn py-1.5 text-[11px] capitalize ${
-                        testOutcome === o
-                          ? o === "win"
-                            ? "text-white"
-                            : o === "lose"
-                            ? "text-white"
-                            : "btn-brand"
-                          : "btn-ghost"
-                      }`}
+                      className={`btn px-1 py-1.5 text-[10px] ${
+                        testOutcome === o && o !== "win" && o !== "lose" ? "btn-brand" : "btn-ghost"
+                      } ${testOutcome === o && (o === "win" || o === "lose") ? "text-white" : ""}`}
                       style={
                         testOutcome === o && o === "win"
                           ? { background: "linear-gradient(180deg,#00e3a0,#00b87e)" }
@@ -435,7 +439,7 @@ export function TradeTerminal() {
                           : undefined
                       }
                     >
-                      {o === "off" ? "Normal" : `Force ${o}`}
+                      {label}
                     </button>
                   ))}
                 </div>

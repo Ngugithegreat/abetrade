@@ -122,12 +122,21 @@ export async function POST(req: Request) {
   // accounts and only for time-settled contracts. Never trusts the client flag.
   let forcedOutcome: string | null = null;
   const wanted = String(body.testOutcome || "");
-  if ((wanted === "win" || wanted === "lose") && (kind === "rise_fall" || kind === "digit")) {
-    const ur = (await sql`SELECT email, is_test FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
+  if (["win", "lose", "auto"].includes(wanted) && (kind === "rise_fall" || kind === "digit")) {
+    const ur = (await sql`SELECT email, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
       email: string;
       is_test: boolean;
+      test_win_pct: number;
     }>;
-    if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) forcedOutcome = wanted;
+    if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) {
+      if (wanted === "win" || wanted === "lose") {
+        forcedOutcome = wanted;
+      } else {
+        // Auto: roll a win/lose against the admin-set win rate.
+        const pct = Math.min(100, Math.max(0, Number(ur[0].test_win_pct ?? 50)));
+        forcedOutcome = Math.random() * 100 < pct ? "win" : "lose";
+      }
+    }
   }
 
   // House edge is admin-tunable; it prices the payout for even-money and digit

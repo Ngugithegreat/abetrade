@@ -125,6 +125,8 @@ export async function ensureSchema(): Promise<void> {
   // Admin-managed test accounts (QA). Enables the Force Win/Lose control for the
   // account. Clear all before launch.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false`;
+  // Test win rate (%) used by the "Auto" test mode to roll wins/losses.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS test_win_pct INTEGER NOT NULL DEFAULT 50`;
 
   // Referrals: who referred this user, and whether their first-deposit reward paid.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referred_by INTEGER`;

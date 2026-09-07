@@ -55,6 +55,7 @@ export type AppUser = {
   kyc_reason?: string | null;
   bonus_locked?: number;
   isTest?: boolean;
+  testWinPct?: number;
 };
 
 export type AppConfig = {

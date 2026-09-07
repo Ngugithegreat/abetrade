@@ -500,10 +500,11 @@ function TestAccountsCard({
   accounts,
   onAction,
 }: {
-  accounts: { id: number; name: string; email: string }[];
+  accounts: { id: number; name: string; email: string; test_win_pct: number }[];
   onAction: (p: Record<string, unknown>) => Promise<Response>;
 }) {
   const [email, setEmail] = useState("");
+  const [pct, setPct] = useState(50);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -538,25 +539,37 @@ function TestAccountsCard({
         )}
       </div>
       <p className="mt-1 text-[11px] leading-relaxed text-muted">
-        Add a team member’s account email to give it a <b>Force Win / Force Lose</b> control on the
-        Trade page — so you can test winning and losing on purpose. Only these accounts are affected;
-        real users never see it. <b>Disable all before going live.</b>
+        Add a team member’s email to give their account a test control on the Trade page:{" "}
+        <b>Real</b>, <b>Auto</b> (wins at the % you set below), <b>Force Win</b>, or <b>Force Lose</b>.
+        Only these accounts are affected — real users never see it. <b>Disable all before launch.</b>
       </p>
 
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           className="input flex-1"
           placeholder="team-member@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && email.trim() && run({ action: "set_test", email, value: true })}
+          onKeyDown={(e) => e.key === "Enter" && email.trim() && run({ action: "set_test", email, value: true, winPct: pct })}
         />
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-surface2 px-3 py-2 text-xs">
+          <span className="text-muted">win</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={pct}
+            onChange={(e) => setPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+            className="tabular w-12 bg-transparent text-right font-bold outline-none"
+          />
+          <span className="text-muted">%</span>
+        </div>
         <button
-          onClick={() => email.trim() && run({ action: "set_test", email, value: true })}
+          onClick={() => email.trim() && run({ action: "set_test", email, value: true, winPct: pct })}
           disabled={busy || !email.trim()}
           className="btn btn-brand shrink-0 px-4 py-2.5 text-sm"
         >
-          Enable test mode
+          Enable
         </button>
       </div>
       {err && <p className="mt-2 text-xs text-down">{err}</p>}
@@ -564,25 +577,57 @@ function TestAccountsCard({
       {accounts.length > 0 && (
         <div className="mt-3 space-y-1.5">
           {accounts.map((a) => (
-            <div
-              key={a.id}
-              className="flex items-center justify-between rounded-xl border border-gold/30 bg-gold/5 px-3 py-2 text-xs"
-            >
-              <span>
-                <span className="font-semibold">{a.name}</span>{" "}
-                <span className="text-muted">· {a.email}</span>
-              </span>
-              <button
-                onClick={() => run({ action: "set_test", email: a.email, value: false })}
-                disabled={busy}
-                className="text-[11px] font-semibold text-down hover:underline"
-              >
-                Disable
-              </button>
-            </div>
+            <TestAccountRow key={a.id} account={a} busy={busy} onRun={run} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TestAccountRow({
+  account,
+  busy,
+  onRun,
+}: {
+  account: { id: number; name: string; email: string; test_win_pct: number };
+  busy: boolean;
+  onRun: (p: Record<string, unknown>) => Promise<void>;
+}) {
+  const [pct, setPct] = useState(account.test_win_pct ?? 50);
+  const changed = pct !== (account.test_win_pct ?? 50);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gold/30 bg-gold/5 px-3 py-2 text-xs">
+      <span className="min-w-0">
+        <span className="font-semibold">{account.name}</span>{" "}
+        <span className="text-muted">· {account.email}</span>
+      </span>
+      <div className="flex items-center gap-2">
+        <span className="text-muted">win</span>
+        <input
+          type="number"
+          min={0}
+          max={100}
+          value={pct}
+          onChange={(e) => setPct(Math.min(100, Math.max(0, Number(e.target.value))))}
+          className="tabular w-12 rounded-lg border border-border bg-surface2 px-2 py-1 text-right font-bold outline-none"
+        />
+        <span className="text-muted">%</span>
+        <button
+          onClick={() => onRun({ action: "set_test", email: account.email, value: true, winPct: pct })}
+          disabled={busy || !changed}
+          className={`text-[11px] font-semibold ${changed ? "text-brand hover:underline" : "text-muted/40"}`}
+        >
+          Save
+        </button>
+        <button
+          onClick={() => onRun({ action: "set_test", email: account.email, value: false })}
+          disabled={busy}
+          className="text-[11px] font-semibold text-down hover:underline"
+        >
+          Disable
+        </button>
+      </div>
     </div>
   );
 }

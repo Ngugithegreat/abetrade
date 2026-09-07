@@ -63,7 +63,7 @@ export async function GET() {
       ORDER BY kyc_submitted_at ASC NULLS LAST
       LIMIT 50
     ` as Promise<any[]>,
-    sql`SELECT id, name, email FROM abetrade_users WHERE is_test = true ORDER BY email` as Promise<any[]>,
+    sql`SELECT id, name, email, test_win_pct FROM abetrade_users WHERE is_test = true ORDER BY email` as Promise<any[]>,
   ]);
 
   const [houseEdge, referralPct, maxStakeCents, maxPayoutCents] = await Promise.all([

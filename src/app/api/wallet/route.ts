@@ -32,7 +32,7 @@ export async function GET() {
 
   const sql = db();
   const [userRows, txns, openTrades, closedTrades, refStats] = await Promise.all([
-    sql`SELECT id, name, email, role, balance, country, status, kyc_status, kyc_reason, bonus_locked, is_test FROM abetrade_users WHERE id = ${session.id}` as Promise<any[]>,
+    sql`SELECT id, name, email, role, balance, country, status, kyc_status, kyc_reason, bonus_locked, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id}` as Promise<any[]>,
     sql`SELECT * FROM abetrade_transactions WHERE user_id = ${session.id} ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status = 'open' ORDER BY created_at DESC` as Promise<any[]>,
     sql`SELECT * FROM abetrade_trades WHERE user_id = ${session.id} AND status != 'open' ORDER BY created_at DESC LIMIT 40` as Promise<any[]>,
@@ -48,6 +48,7 @@ export async function GET() {
           bonus_locked: Number(u.bonus_locked || 0),
           account_no: accountNo(u.id),
           isTest: !!u.is_test || isTestEmail(u.email),
+          testWinPct: Number(u.test_win_pct ?? 50),
         }
       : null,
     transactions: txns,

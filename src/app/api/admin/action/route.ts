@@ -65,9 +65,11 @@ export async function POST(req: Request) {
   if (action === "set_test") {
     const email = String(body.email || "").trim().toLowerCase();
     const value = !!body.value;
+    const winPct = Math.min(100, Math.max(0, Math.round(Number(body.winPct ?? 50))));
     if (!email) return NextResponse.json({ error: "Enter an email." }, { status: 400 });
     const r = (await sql`
-      UPDATE abetrade_users SET is_test = ${value} WHERE lower(email) = ${email} RETURNING id
+      UPDATE abetrade_users SET is_test = ${value}, test_win_pct = ${winPct}
+      WHERE lower(email) = ${email} RETURNING id
     `) as any[];
     if (!r.length) return NextResponse.json({ error: "No account with that email." }, { status: 404 });
     return NextResponse.json({ ok: true });
