@@ -74,8 +74,7 @@ export async function POST(req: Request) {
     if (locked > 0 && amount > withdrawable) {
       return NextResponse.json(
         {
-          error: `Bonus funds ($${(locked / 100).toFixed(2)}) are for trading only and can't be withdrawn. Withdrawable now: $${(withdrawable / 100).toFixed(2)}.`,
-          bonusLocked: locked,
+          error: `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.`,
         },
         { status: 403 }
       );
