@@ -11,6 +11,7 @@ import {
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HeroVisual } from "@/components/HeroVisual";
+import { HeroChartBackground } from "@/components/HeroChartBackground";
 import { RotatingWord } from "@/components/RotatingWord";
 import { MARKETS, PAYOUT_MULTIPLIER } from "@/lib/markets";
 
@@ -22,6 +23,10 @@ export default function Landing() {
         <div className="absolute -left-24 top-8 h-96 w-96 rounded-full bg-brand/25 blur-3xl animate-blob" />
         <div className="absolute -right-24 top-48 h-[30rem] w-[30rem] rounded-full bg-indigo-500/20 blur-3xl animate-blob-slow" />
         <div className="absolute bottom-24 left-1/3 h-80 w-80 rounded-full bg-fuchsia-500/15 blur-3xl animate-blob [animation-delay:-9s]" />
+        {/* Live, drifting chart line across the hero backdrop */}
+        <div className="absolute inset-x-0 top-0 h-[780px] [mask-image:linear-gradient(to_bottom,#000_58%,transparent)] [-webkit-mask-image:linear-gradient(to_bottom,#000_58%,transparent)]">
+          <HeroChartBackground />
+        </div>
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/40 to-transparent" />
       </div>
       {/* Header */}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -52,6 +53,15 @@ export function WalletView() {
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const rate = config?.usdKesRate ?? 130;
   const country = user?.country ?? null;
+
+  // Open on the tab the nav's Deposit/Withdraw button asked for (?action=…),
+  // and react if it changes while already on the wallet.
+  const searchParams = useSearchParams();
+  const action = searchParams.get("action");
+  useEffect(() => {
+    if (action === "withdraw") setTab("withdraw");
+    else if (action === "deposit") setTab("deposit");
+  }, [action]);
 
   // Returning from a hosted checkout (?deposit=processing) — confirm & poll.
   const [processing, setProcessing] = useState(false);

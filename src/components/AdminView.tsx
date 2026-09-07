@@ -34,6 +34,17 @@ type Player = {
   trades: number;
   deposited: number;
   withdrawn: number;
+  depositMethod?: string | null;
+};
+
+const METHOD_LABELS: Record<string, string> = {
+  mpesa: "M-Pesa",
+  mtn: "MTN",
+  airtel: "Airtel",
+  card: "Card",
+  bank: "Bank",
+  crypto: "Crypto",
+  manual: "Manual",
 };
 
 export function AdminView() {
@@ -112,9 +123,6 @@ export function AdminView() {
         <RateCard
           icon={Gift}
           title="Referral reward"
-          blurb={(pct) =>
-            `Referrers earn ${pct || 0}% of each friend's first deposit (capped at $100), credited automatically.`
-          }
           value={Number(data.referralPct ?? 0.1)}
           onSave={(pct) => post({ action: "set_referral_pct", percent: pct })}
         />
@@ -124,13 +132,11 @@ export function AdminView() {
       <div className="grid gap-3 lg:grid-cols-2">
         <AmountCard
           title="Max stake per trade"
-          blurb="The biggest amount a player can stake on one trade."
           value={Number(data.maxStakeCents ?? 50000) / 100}
           onSave={(usd) => post({ action: "set_max_stake", usd })}
         />
         <AmountCard
           title="Max payout per trade"
-          blurb="The most any single trade can win — caps your loss on one trade."
           value={Number(data.maxPayoutCents ?? 200000) / 100}
           onSave={(usd) => post({ action: "set_max_payout", usd })}
         />
@@ -233,6 +239,7 @@ export function AdminView() {
                 <th className="px-5 py-2 font-medium">Account</th>
                 <th className="px-3 py-2 text-right font-medium">Balance</th>
                 <th className="px-3 py-2 text-right font-medium">Deposited</th>
+                <th className="px-3 py-2 font-medium">Method</th>
                 <th className="px-3 py-2 text-right font-medium">Withdrawn</th>
                 <th className="px-3 py-2 text-right font-medium">Trades</th>
                 <th className="px-3 py-2 text-right font-medium">P&amp;L</th>
@@ -251,13 +258,7 @@ export function AdminView() {
       {/* Reset deposit ledger */}
       <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-bold">Reset deposit history</div>
-            <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
-              Clears the deposit records so the Deposits total goes to $0 — any real deposit after this
-              stands out. Balances, trades and everything else are untouched.
-            </p>
-          </div>
+          <div className="text-sm font-bold">Reset deposit history</div>
           <button
             onClick={() => {
               if (window.confirm("Clear all deposit records and set the Deposits total to $0? (Balances are not changed.)")) {
@@ -317,6 +318,15 @@ function PlayerRow({
       </td>
       <td className="tabular px-3 py-2.5 text-right text-brand">{money(u.balance)}</td>
       <td className={`tabular px-3 py-2.5 text-right ${u.deposited > 0 ? "text-up" : "text-muted"}`}>{money(u.deposited)}</td>
+      <td className="px-3 py-2.5">
+        {u.depositMethod ? (
+          <span className="rounded-md bg-surface2 px-2 py-0.5 text-[11px] font-medium text-fg">
+            {METHOD_LABELS[u.depositMethod] || u.depositMethod}
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted">—</span>
+        )}
+      </td>
       <td className="tabular px-3 py-2.5 text-right text-muted">{money(u.withdrawn)}</td>
       <td className="tabular px-3 py-2.5 text-right">{u.trades}</td>
       <td className={`tabular px-3 py-2.5 text-right font-bold ${u.pnl >= 0 ? "text-up" : "text-down"}`}>
@@ -389,15 +399,8 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
   return (
     <div className="card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-bold">
-            <Percent className="h-4 w-4 text-brand" /> House earn (margin)
-          </div>
-          <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
-            The edge baked into every payout. At {pct || 0}% the house keeps ~{pct || 0}% of all
-            volume over time. Rise/Fall pays {Math.max(1.05, 2 * (1 - (Number(pct) || 0) / 100)).toFixed(2)}×.
-            Uncapped for testing — payouts never drop below 1.05× (winners always get a small profit).
-          </p>
+        <div className="flex items-center gap-2 text-sm font-bold">
+          <Percent className="h-4 w-4 text-brand" /> House earn (margin)
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
@@ -421,13 +424,11 @@ function HouseEdgeCard({ edge, onSave }: { edge: number; onSave: (pct: number) =
 function RateCard({
   icon: Icon,
   title,
-  blurb,
   value,
   onSave,
 }: {
   icon: any;
   title: string;
-  blurb: (pct: string) => string;
   value: number;
   onSave: (pct: number) => Promise<Response>;
 }) {
@@ -458,7 +459,6 @@ function RateCard({
       <div className="flex items-center gap-2 text-sm font-bold">
         <Icon className="h-4 w-4 text-brand" /> {title}
       </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted">{blurb(pct)}</p>
       <div className="mt-3 flex items-center gap-2">
         <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
           <input
@@ -477,9 +477,8 @@ function RateCard({
   );
 }
 
-// Projection-only calculator: shows how house profit moves with win rate, edge,
-// stake and volume. It NEVER touches live trades — it just does the math so you
-// can see how a broker makes money. Safe to keep in production (it's read-only).
+// Global test mode: puts every logged-in account on the simulated market and
+// rolls wins/losses at the % below. Turn OFF before going live.
 function GlobalTestCard({
   on,
   pct,
@@ -505,14 +504,7 @@ function GlobalTestCard({
   return (
     <div className={`card p-5 ${on ? "border-gold/50" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-bold">🧪 Global test mode</div>
-          <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
-            Puts the <b>whole system</b> on simulated data — anyone who logs in trades a fake market
-            whose wins/losses are rolled at the % below. No whitelisting needed. <b>Turn OFF before
-            going live</b> to switch everyone back to the real market.
-          </p>
-        </div>
+        <div className="flex items-center gap-2 text-sm font-bold">🧪 Global test mode</div>
         <button
           onClick={() => save(!on, p)}
           disabled={busy}
@@ -525,9 +517,6 @@ function GlobalTestCard({
 
       {on && (
         <div className="mt-4 rounded-xl border border-gold/40 bg-gold/10 p-3">
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gold">
-            ⚠️ System is in TEST MODE — simulated data, not real trades
-          </div>
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted">Everyone wins</span>
             <span className="tabular font-bold">{p}% / loses {100 - p}%</span>
@@ -595,12 +584,6 @@ function TestAccountsCard({
           </button>
         )}
       </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted">
-        Add a team member’s email to give their account a test control on the Trade page:{" "}
-        <b>Real</b>, <b>Auto</b> (wins at the % you set below), <b>Force Win</b>, or <b>Force Lose</b>.
-        Only these accounts are affected — real users never see it. <b>Disable all before launch.</b>
-      </p>
-
       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
           className="input flex-1"
@@ -727,10 +710,6 @@ function WithdrawLimitsCard({
       <div className="flex items-center gap-2 text-sm font-bold">
         <ArrowUpFromLine className="h-4 w-4 text-brand" /> Instant withdrawal limits
       </div>
-      <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
-        Withdrawals are paid out instantly (no manual approval). These per-account daily caps are
-        the safety net against a drained account.
-      </p>
       <div className="mt-3 flex flex-wrap items-end gap-4">
         <div>
           <div className="mb-1 text-[11px] uppercase tracking-wider text-muted">Max per day (count)</div>
@@ -763,12 +742,10 @@ function WithdrawLimitsCard({
 
 function AmountCard({
   title,
-  blurb,
   value,
   onSave,
 }: {
   title: string;
-  blurb: string;
   value: number;
   onSave: (usd: number) => Promise<Response>;
 }) {
@@ -799,7 +776,6 @@ function AmountCard({
       <div className="flex items-center gap-2 text-sm font-bold">
         <Coins className="h-4 w-4 text-brand" /> {title}
       </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted">{blurb}</p>
       <div className="mt-3 flex items-center gap-2">
         <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
           <span className="mr-1 text-muted">$</span>

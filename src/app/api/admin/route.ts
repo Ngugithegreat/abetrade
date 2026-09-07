@@ -53,7 +53,10 @@ export async function GET() {
         COALESCE((SELECT SUM(x.amount) FROM abetrade_transactions x
                    WHERE x.user_id = u.id AND x.type='deposit' AND x.status='completed'),0) AS deposited,
         COALESCE((SELECT SUM(-x.amount) FROM abetrade_transactions x
-                   WHERE x.user_id = u.id AND x.type='withdrawal' AND x.status<>'rejected'),0) AS withdrawn
+                   WHERE x.user_id = u.id AND x.type='withdrawal' AND x.status<>'rejected'),0) AS withdrawn,
+        (SELECT x.method FROM abetrade_transactions x
+                   WHERE x.user_id = u.id AND x.type='deposit' AND x.status='completed' AND x.method IS NOT NULL
+                   ORDER BY x.created_at DESC LIMIT 1) AS deposit_method
       FROM abetrade_users u
       LEFT JOIN abetrade_trades t ON t.user_id = u.id
       GROUP BY u.id
@@ -134,6 +137,7 @@ export async function GET() {
       trades: num(u.trades),
       deposited: num(u.deposited),
       withdrawn: num(u.withdrawn),
+      depositMethod: u.deposit_method || null,
     })),
   });
 }
