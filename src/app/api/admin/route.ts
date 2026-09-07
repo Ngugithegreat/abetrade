@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { getHouseEdge, getReferralPct, getMaxStakeCents, getMaxPayoutCents, getGlobalTest, getGlobalTestPct } from "@/lib/settings";
+import { getHouseEdge, getReferralPct, getMaxStakeCents, getMaxPayoutCents, getGlobalTest, getGlobalTestPct, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { accountNo } from "@/lib/format";
 
 export const runtime = "nodejs";
@@ -66,14 +66,17 @@ export async function GET() {
     sql`SELECT id, name, email, test_win_pct FROM abetrade_users WHERE is_test = true ORDER BY email` as Promise<any[]>,
   ]);
 
-  const [houseEdge, referralPct, maxStakeCents, maxPayoutCents, globalTest, globalTestPct] = await Promise.all([
-    getHouseEdge(),
-    getReferralPct(),
-    getMaxStakeCents(),
-    getMaxPayoutCents(),
-    getGlobalTest(),
-    getGlobalTestPct(),
-  ]);
+  const [houseEdge, referralPct, maxStakeCents, maxPayoutCents, globalTest, globalTestPct, wdDailyCount, wdDailyMaxCents] =
+    await Promise.all([
+      getHouseEdge(),
+      getReferralPct(),
+      getMaxStakeCents(),
+      getMaxPayoutCents(),
+      getGlobalTest(),
+      getGlobalTestPct(),
+      getWithdrawDailyCount(),
+      getWithdrawDailyMaxCents(),
+    ]);
   const k = kpi[0] || {};
   const num = (v: any) => Number(v ?? 0);
 
@@ -105,6 +108,8 @@ export async function GET() {
     maxPayoutCents,
     globalTest,
     globalTestPct,
+    wdDailyCount,
+    wdDailyMaxCents,
     testAccounts,
     kyc: kycPending.map((u) => ({
       id: u.id,

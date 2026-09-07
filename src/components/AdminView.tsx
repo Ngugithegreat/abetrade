@@ -157,6 +157,13 @@ export function AdminView() {
         />
       </div>
 
+      {/* Instant-withdrawal daily limits */}
+      <WithdrawLimitsCard
+        count={Number(data.wdDailyCount ?? 5)}
+        maxUsd={Number(data.wdDailyMaxCents ?? 100000) / 100}
+        onSave={(count, maxUsd) => post({ action: "set_withdraw_limits", count, maxUsd })}
+      />
+
       {/* Test accounts (QA) */}
       <TestAccountsCard accounts={data.testAccounts || []} onAction={post} />
 
@@ -801,6 +808,78 @@ function ProfitSimulator({ edge }: { edge: number }) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function WithdrawLimitsCard({
+  count,
+  maxUsd,
+  onSave,
+}: {
+  count: number;
+  maxUsd: number;
+  onSave: (count: number, maxUsd: number) => Promise<Response>;
+}) {
+  const [c, setC] = useState(String(count));
+  const [m, setM] = useState(String(Math.round(maxUsd)));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    setC(String(count));
+    setM(String(Math.round(maxUsd)));
+  }, [count, maxUsd]);
+
+  async function save() {
+    const cn = Number(c);
+    const mx = Number(m);
+    if (!Number.isFinite(cn) || cn < 1 || !Number.isFinite(mx) || mx <= 0) return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await onSave(cn, mx);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <ArrowUpFromLine className="h-4 w-4 text-brand" /> Instant withdrawal limits
+      </div>
+      <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
+        Withdrawals are paid out instantly (no manual approval). These per-account daily caps are
+        the safety net against a drained account.
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-4">
+        <div>
+          <div className="mb-1 text-[11px] uppercase tracking-wider text-muted">Max per day (count)</div>
+          <input
+            value={c}
+            onChange={(e) => setC(e.target.value.replace(/[^0-9]/g, ""))}
+            inputMode="numeric"
+            className="tabular w-24 rounded-xl border border-border bg-surface2 px-3 py-2 text-lg font-bold outline-none"
+          />
+        </div>
+        <div>
+          <div className="mb-1 text-[11px] uppercase tracking-wider text-muted">Max total per day</div>
+          <div className="flex items-center rounded-xl border border-border bg-surface2 px-3 py-2">
+            <span className="mr-1 text-muted">$</span>
+            <input
+              value={m}
+              onChange={(e) => setM(e.target.value.replace(/[^0-9.]/g, ""))}
+              inputMode="decimal"
+              className="tabular w-28 bg-transparent text-lg font-bold outline-none"
+            />
+          </div>
+        </div>
+        <button onClick={save} disabled={saving} className="btn btn-brand px-4 py-2.5 text-sm">
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+        </button>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
-import { setHouseEdge, setReferralPct, setMaxStakeCents, setMaxPayoutCents, setGlobalTest, setGlobalTestPct } from "@/lib/settings";
+import { setHouseEdge, setReferralPct, setMaxStakeCents, setMaxPayoutCents, setGlobalTest, setGlobalTestPct, setWithdrawDailyCount, setWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, depositReceiptEmail, kycApprovedEmail, kycRejectedEmail } from "@/lib/email";
 import { payReferralOnDeposit } from "@/lib/referral";
 
@@ -44,6 +44,18 @@ export async function POST(req: Request) {
     }
     const rate = await setReferralPct(pct / 100);
     return NextResponse.json({ ok: true, referralPct: rate });
+  }
+
+  // ---- Instant-withdrawal daily limits ----
+  if (action === "set_withdraw_limits") {
+    const count = Math.round(Number(body.count));
+    const maxUsd = Number(body.maxUsd);
+    if (!Number.isFinite(count) || count < 1 || !Number.isFinite(maxUsd) || maxUsd <= 0) {
+      return NextResponse.json({ error: "Enter a valid count and daily max." }, { status: 400 });
+    }
+    const c = await setWithdrawDailyCount(count);
+    const m = await setWithdrawDailyMaxCents(Math.round(maxUsd * 100));
+    return NextResponse.json({ ok: true, wdDailyCount: c, wdDailyMaxCents: m });
   }
 
   // ---- Risk limits (dollars in the request → stored as cents) ----

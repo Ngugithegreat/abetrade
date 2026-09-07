@@ -64,6 +64,14 @@ export const setGlobalTest = (on: boolean) => setIntSetting("global_test", on ? 
 export const getGlobalTestPct = () => getIntSetting("global_test_pct", 50, 0, 100);
 export const setGlobalTestPct = (v: number) => setIntSetting("global_test_pct", v, 0, 100);
 
+// Instant-withdrawal daily limits, per account.
+export const DEFAULT_WITHDRAW_DAILY_COUNT = 5;
+export const DEFAULT_WITHDRAW_DAILY_MAX_CENTS = 100000; // $1,000/day
+export const getWithdrawDailyCount = () => getIntSetting("wd_daily_count", DEFAULT_WITHDRAW_DAILY_COUNT, 1, 100);
+export const setWithdrawDailyCount = (v: number) => setIntSetting("wd_daily_count", v, 1, 100);
+export const getWithdrawDailyMaxCents = () => getIntSetting("wd_daily_max_cents", DEFAULT_WITHDRAW_DAILY_MAX_CENTS, 100, 100_000_00);
+export const setWithdrawDailyMaxCents = (v: number) => setIntSetting("wd_daily_max_cents", v, 100, 100_000_00);
+
 /** Max stake allowed on a single trade, in cents. */
 export const getMaxStakeCents = () => getIntSetting("max_stake_cents", DEFAULT_MAX_STAKE_CENTS, 100, 10_000_00);
 export const setMaxStakeCents = (v: number) => setIntSetting("max_stake_cents", v, 100, 10_000_00);

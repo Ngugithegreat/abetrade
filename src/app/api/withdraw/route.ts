@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { isBlocked } from "@/lib/settings";
+import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { requiresKyc, getKycStatus } from "@/lib/kyc";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
@@ -104,6 +104,30 @@ export async function POST(req: Request) {
     }
   }
 
+  // Instant-withdrawal daily limits (per account, resets at UTC midnight).
+  const [maxCount, maxDaily] = await Promise.all([getWithdrawDailyCount(), getWithdrawDailyMaxCents()]);
+  const today = (await sql`
+    SELECT COUNT(*)::int AS n, COALESCE(SUM(-amount), 0) AS total
+    FROM abetrade_transactions
+    WHERE user_id = ${session.id} AND type = 'withdrawal' AND status != 'rejected'
+      AND created_at >= date_trunc('day', now())
+  `) as Array<{ n: number; total: string | number }>;
+  const usedCount = Number(today[0]?.n ?? 0);
+  const usedTotal = Number(today[0]?.total ?? 0);
+  if (usedCount >= maxCount) {
+    return NextResponse.json(
+      { error: `Daily withdrawal limit reached — you can make ${maxCount} withdrawal${maxCount === 1 ? "" : "s"} per day. Try again tomorrow.` },
+      { status: 429 }
+    );
+  }
+  if (usedTotal + amount > maxDaily) {
+    const left = Math.max(0, maxDaily - usedTotal);
+    return NextResponse.json(
+      { error: `This exceeds your daily withdrawal limit of $${(maxDaily / 100).toFixed(0)}. You can still withdraw $${(left / 100).toFixed(2)} today.` },
+      { status: 429 }
+    );
+  }
+
   // Reserve funds atomically.
   const debit = (await sql`
     UPDATE abetrade_users SET balance = balance - ${amount}
@@ -163,10 +187,12 @@ export async function POST(req: Request) {
     }
   }
 
-  // ---- Manual withdrawal (admin approval) ----
+  // ---- Instant withdrawal (no admin approval) ----
+  // Completed immediately within the daily caps; funds are paid out to the given
+  // destination by the operator's payout process.
   const rows = (await sql`
     INSERT INTO abetrade_transactions (user_id, type, amount, status, method, reference, note)
-    VALUES (${session.id}, 'withdrawal', ${-amount}, 'pending', ${method}, ${rawRef}, 'Withdrawal request')
+    VALUES (${session.id}, 'withdrawal', ${-amount}, 'completed', ${method}, ${rawRef}, 'Instant withdrawal')
     RETURNING *
   `) as any[];
 
@@ -178,5 +204,6 @@ export async function POST(req: Request) {
     ok: true,
     transaction: rows[0],
     balance: balanceAfter,
+    message: `Withdrawal of $${(amount / 100).toFixed(2)} sent to ${rawRef}.`,
   });
 }
