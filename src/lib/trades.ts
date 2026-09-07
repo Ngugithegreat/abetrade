@@ -46,29 +46,51 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
   const expiry = Number(trade.expiry_epoch);
   if (nowSec < expiry) return trade;
 
-  const tick = await getTickAtOrAfter(trade.symbol, expiry);
-  if (!tick) return trade;
+  const forced = trade.forced_outcome === "win" || trade.forced_outcome === "lose";
+  const entry = Number(trade.entry_price);
+  const dec = decimalsFor(trade.symbol);
 
   let won: boolean;
   let exitDigit: number | null = null;
-  if (trade.kind === "digit") {
-    exitDigit = lastDigit(tick.price, decimalsFor(trade.symbol));
-  }
-  if (trade.forced_outcome === "win" || trade.forced_outcome === "lose") {
-    // Test harness (whitelisted accounts only): outcome was fixed at placement.
+  let exitPrice: number;
+
+  if (forced) {
+    // Test harness (whitelisted accounts only): settle against the controlled
+    // sim outcome — no real feed needed, so it matches what the chart showed.
     won = trade.forced_outcome === "win";
-  } else if (trade.kind === "digit") {
-    won = digitWins(
-      trade.subtype as DigitSubtype,
-      trade.prediction || trade.direction,
-      Number(trade.barrier ?? 0),
-      exitDigit as number
-    );
+    if (trade.kind === "digit") {
+      let d = 0;
+      for (let i = 0; i < 10; i++) {
+        if (digitWins(trade.subtype as DigitSubtype, trade.prediction || trade.direction, Number(trade.barrier ?? 0), i) === won) {
+          d = i;
+          break;
+        }
+      }
+      exitDigit = d;
+      const sc = Math.pow(10, dec);
+      let scaled = Math.round(entry * sc);
+      scaled = scaled - (((scaled % 10) + 10) % 10) + d;
+      exitPrice = scaled / sc;
+    } else {
+      const higher = trade.direction === "rise" ? won : !won;
+      const bump = Math.max(0.02, Math.abs(entry) * 0.004);
+      exitPrice = higher ? entry + bump : entry - bump;
+    }
   } else {
-    won =
-      trade.direction === "rise"
-        ? tick.price > trade.entry_price
-        : tick.price < trade.entry_price;
+    const tick = await getTickAtOrAfter(trade.symbol, expiry);
+    if (!tick) return trade;
+    exitPrice = tick.price;
+    if (trade.kind === "digit") {
+      exitDigit = lastDigit(tick.price, dec);
+      won = digitWins(
+        trade.subtype as DigitSubtype,
+        trade.prediction || trade.direction,
+        Number(trade.barrier ?? 0),
+        exitDigit
+      );
+    } else {
+      won = trade.direction === "rise" ? tick.price > entry : tick.price < entry;
+    }
   }
 
   const status: "won" | "lost" = won ? "won" : "lost";
@@ -76,7 +98,7 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
 
   const updated = (await sql`
     UPDATE abetrade_trades
-    SET status = ${status}, exit_price = ${tick.price}, exit_digit = ${exitDigit}, settled_at = now()
+    SET status = ${status}, exit_price = ${exitPrice}, exit_digit = ${exitDigit}, settled_at = now()
     WHERE id = ${trade.id} AND status = 'open'
     RETURNING *
   `) as TradeRow[];
@@ -132,23 +154,38 @@ export async function closeMultiplier(
 ): Promise<TradeRow> {
   if (trade.status !== "open" || trade.kind !== "mult") return trade;
 
-  const px = tick ?? (await getLatestTick(trade.symbol));
   const stake = Number(trade.stake);
-  const pnl = multiplierPnl({
-    direction: trade.direction as "up" | "down",
-    entry: Number(trade.entry_price),
-    current: px.price,
-    stakeCents: stake,
-    multiplier: Number(trade.multiplier),
-  });
+  const entry = Number(trade.entry_price);
   const maxPayout = await getMaxPayoutCents();
-  const payout = Math.min(maxPayout, Math.max(0, stake + pnl));
+  const forced = trade.forced_outcome === "win" || trade.forced_outcome === "lose";
+
+  let pxPrice: number;
+  let payout: number;
+  if (forced) {
+    // Test harness: controlled outcome, no real feed needed.
+    const won = trade.forced_outcome === "win";
+    payout = won ? Math.min(maxPayout, Math.round(stake * 2)) : 0;
+    const bump = Math.max(0.02, Math.abs(entry) * 0.004);
+    const higher = trade.direction === "up" ? won : !won;
+    pxPrice = higher ? entry + bump : entry - bump;
+  } else {
+    const px = tick ?? (await getLatestTick(trade.symbol));
+    pxPrice = px.price;
+    const pnl = multiplierPnl({
+      direction: trade.direction as "up" | "down",
+      entry,
+      current: px.price,
+      stakeCents: stake,
+      multiplier: Number(trade.multiplier),
+    });
+    payout = Math.min(maxPayout, Math.max(0, stake + pnl));
+  }
   const status: "won" | "lost" = payout >= stake ? "won" : "lost";
 
   const sql = db();
   const updated = (await sql`
     UPDATE abetrade_trades
-    SET status = ${status}, exit_price = ${px.price}, payout = ${payout}, settled_at = now()
+    SET status = ${status}, exit_price = ${pxPrice}, payout = ${payout}, settled_at = now()
     WHERE id = ${trade.id} AND status = 'open'
     RETURNING *
   `) as TradeRow[];
@@ -186,6 +223,8 @@ export async function settleStopOuts(userId: number): Promise<void> {
   `) as TradeRow[];
 
   for (const t of open) {
+    // Test (forced) multipliers are closed manually against the sim, not the feed.
+    if (t.forced_outcome === "win" || t.forced_outcome === "lose") continue;
     try {
       const px = await getLatestTick(t.symbol);
       const so = Number(t.stop_out_price);

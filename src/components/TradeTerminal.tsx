@@ -19,6 +19,7 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { useApp, Trade } from "./app-context";
 import { useDerivFeed, useDerivMarkets } from "@/lib/useDerivFeed";
+import { useTestFeed } from "@/lib/useTestFeed";
 import { PriceChart } from "./PriceChart";
 import { DigitHeatmap } from "./DigitHeatmap";
 import { BotPanel } from "./BotPanel";
@@ -38,6 +39,7 @@ import {
   multiplierPnl,
   lastDigit,
   digitPayoutMult,
+  digitWins,
   DigitSubtype,
 } from "@/lib/markets";
 import { money, cents } from "@/lib/format";
@@ -89,7 +91,10 @@ export function TradeTerminal() {
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
   const [testOutcome, setTestOutcome] = useState<"real" | "auto" | "win" | "lose">("auto");
 
-  const feed = useDerivFeed(symbol);
+  const sim = !!user?.isTest; // testers get a controlled, steerable sim market
+  const realFeed = useDerivFeed(symbol, !sim);
+  const testFeed = useTestFeed(symbol, sim);
+  const feed = sim ? testFeed : realFeed;
   const markets = useDerivMarkets(MARKETS.map((m) => m.symbol));
   const market = marketBySymbol(symbol)!;
   const dp = market.decimals;
@@ -177,6 +182,33 @@ export function TradeTerminal() {
     alertPrevRef.current = cur;
   }, [feed.last, alertPrice, market.short, dp, showToast]);
 
+  // Move the sim chart so the price visibly ends on the winning/losing side.
+  function steerToOutcome(t: any) {
+    const won = t.forced_outcome === "win";
+    const entry = Number(t.entry_price) || feed.last?.price || 0;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (t.kind === "digit") {
+      const sub = t.subtype as DigitSubtype;
+      const pred = t.prediction || t.direction;
+      const bar = Number(t.barrier ?? 0);
+      let d = won ? 0 : 0;
+      for (let i = 0; i < 10; i++) {
+        if (digitWins(sub, pred, bar, i) === won) { d = i; break; }
+      }
+      const scaleD = Math.pow(10, dp);
+      let scaled = Math.round(entry * scaleD);
+      scaled = scaled - (((scaled % 10) + 10) % 10) + d; // set last digit to d
+      testFeed.steer(scaled / scaleD, Number(t.expiry_epoch) || nowSec + digitTicks);
+    } else {
+      const up = t.direction === "rise" || t.direction === "up";
+      const wantHigher = (up && won) || (!up && !won);
+      const delta = Math.max(0.02, Math.abs(entry) * 0.004);
+      const target = wantHigher ? entry + delta : entry - delta;
+      const deadline = Number(t.expiry_epoch) > nowSec ? Number(t.expiry_epoch) : nowSec + 25;
+      testFeed.steer(target, deadline);
+    }
+  }
+
   async function place(direction: string, extra?: Record<string, unknown>) {
     if (!stakeValid || placing) return;
     setPlacing(direction);
@@ -212,6 +244,8 @@ export function TradeTerminal() {
       if (!res.ok) showToast(json.error || "Trade failed.", false);
       else {
         if (typeof json.balance === "number") setBalance(json.balance);
+        // Test accounts: steer the sim chart toward the server-decided result.
+        if (sim && json.trade?.forced_outcome) steerToOutcome(json.trade);
         showToast(`${direction.toUpperCase()} · ${market.short} · ${money(stakeCents)}`, true);
         refresh();
       }

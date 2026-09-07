@@ -122,7 +122,7 @@ export async function POST(req: Request) {
   // accounts and only for time-settled contracts. Never trusts the client flag.
   let forcedOutcome: string | null = null;
   const wanted = String(body.testOutcome || "");
-  if (["win", "lose", "auto"].includes(wanted) && (kind === "rise_fall" || kind === "digit")) {
+  if (["win", "lose", "auto"].includes(wanted) && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
     const ur = (await sql`SELECT email, is_test, test_win_pct FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
       email: string;
       is_test: boolean;
@@ -215,10 +215,10 @@ export async function POST(req: Request) {
     rows = (await sql`
       INSERT INTO abetrade_trades
         (user_id, kind, symbol, direction, stake, payout, multiplier, entry_price,
-         entry_epoch, expiry_epoch, stop_out_price, status)
+         entry_epoch, expiry_epoch, stop_out_price, status, forced_outcome)
       VALUES
         (${session.id}, 'mult', ${symbol}, ${direction}, ${stake}, 0, ${multiplier},
-         ${entry.price}, ${entry.epoch}, 0, ${so}, 'open')
+         ${entry.price}, ${entry.epoch}, 0, ${so}, 'open', ${forcedOutcome})
       RETURNING *
     `) as any[];
   } else {

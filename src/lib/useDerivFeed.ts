@@ -29,11 +29,12 @@ const POLL_MS = 1000;
  * double-mount can't cross wires between runs. A watchdog forces a reconnect if
  * no data arrives quickly.
  */
-export function useDerivFeed(symbol: string): FeedState {
+export function useDerivFeed(symbol: string, enabled = true): FeedState {
   const [points, setPoints] = useState<Point[]>([]);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (!enabled || !symbol) return;
     let closed = false;
     let ws: WebSocket | null = null;
     let poll: ReturnType<typeof setInterval> | null = null;
@@ -183,7 +184,7 @@ export function useDerivFeed(symbol: string): FeedState {
         }
       }
     };
-  }, [symbol]);
+  }, [symbol, enabled]);
 
   const last = points.length ? points[points.length - 1] : null;
   const prev = points.length > 1 ? points[points.length - 2] : null;
