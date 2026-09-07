@@ -111,6 +111,10 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS barrier INTEGER`;
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS exit_digit INTEGER`;
 
+  // Test harness only: a forced win/lose outcome, ever set ONLY for whitelisted
+  // TEST_EMAILS accounts. Null for every real trade.
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS forced_outcome TEXT`;
+
   // Account controls: status (active | blocked) + promotional flag (admin-only).
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`;
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS promo BOOLEAN NOT NULL DEFAULT false`;

@@ -69,7 +69,7 @@ function beep() {
 }
 
 export function TradeTerminal() {
-  const { balance, setBalance, data, refresh, loading } = useApp();
+  const { balance, setBalance, data, refresh, loading, user } = useApp();
   const [symbol, setSymbol] = useState("1HZ100V");
   const [contract, setContract] = useState<Contract>("digit");
   const [stake, setStake] = useState("10");
@@ -85,6 +85,7 @@ export function TradeTerminal() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [alertPrice, setAlertPrice] = useState<number | null>(null);
   const alertPrevRef = useRef<number | null>(null);
+  const [testOutcome, setTestOutcome] = useState<"off" | "win" | "lose">("off");
 
   const feed = useDerivFeed(symbol);
   const markets = useDerivMarkets(MARKETS.map((m) => m.symbol));
@@ -197,6 +198,8 @@ export function TradeTerminal() {
           entry: feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : undefined,
           ...extra,
         };
+      // Test harness (whitelisted accounts only): force this trade's outcome.
+      if (user?.isTest && testOutcome !== "off") body.testOutcome = testOutcome;
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -404,6 +407,40 @@ export function TradeTerminal() {
                 </button>
               ))}
             </div>
+
+            {user?.isTest && (
+              <div className="mb-3 rounded-xl border border-gold/40 bg-gold/10 p-2">
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gold">
+                  🧪 Test mode · forces the next trade’s result
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(["off", "win", "lose"] as const).map((o) => (
+                    <button
+                      key={o}
+                      onClick={() => setTestOutcome(o)}
+                      className={`btn py-1.5 text-[11px] capitalize ${
+                        testOutcome === o
+                          ? o === "win"
+                            ? "text-white"
+                            : o === "lose"
+                            ? "text-white"
+                            : "btn-brand"
+                          : "btn-ghost"
+                      }`}
+                      style={
+                        testOutcome === o && o === "win"
+                          ? { background: "linear-gradient(180deg,#00e3a0,#00b87e)" }
+                          : testOutcome === o && o === "lose"
+                          ? { background: "linear-gradient(180deg,#ff5b6a,#e13b4b)" }
+                          : undefined
+                      }
+                    >
+                      {o === "off" ? "Normal" : `Force ${o}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-muted">Stake (USD)</label>

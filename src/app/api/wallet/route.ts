@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { accountNo } from "@/lib/format";
+import { isTestEmail } from "@/lib/testmode";
 import { referralStats } from "@/lib/referral";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
@@ -41,7 +42,13 @@ export async function GET() {
   const u = userRows[0];
   return NextResponse.json({
     user: u
-      ? { ...u, balance: Number(u.balance), bonus_locked: Number(u.bonus_locked || 0), account_no: accountNo(u.id) }
+      ? {
+          ...u,
+          balance: Number(u.balance),
+          bonus_locked: Number(u.bonus_locked || 0),
+          account_no: accountNo(u.id),
+          isTest: isTestEmail(u.email),
+        }
       : null,
     transactions: txns,
     openTrades,

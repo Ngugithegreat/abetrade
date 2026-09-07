@@ -27,6 +27,7 @@ export type TradeRow = {
   prediction: string | null;
   barrier: number | null;
   exit_digit: number | null;
+  forced_outcome: string | null;
   status: "open" | "won" | "lost";
   created_at: string;
   settled_at: string | null;
@@ -52,11 +53,16 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
   let exitDigit: number | null = null;
   if (trade.kind === "digit") {
     exitDigit = lastDigit(tick.price, decimalsFor(trade.symbol));
+  }
+  if (trade.forced_outcome === "win" || trade.forced_outcome === "lose") {
+    // Test harness (whitelisted accounts only): outcome was fixed at placement.
+    won = trade.forced_outcome === "win";
+  } else if (trade.kind === "digit") {
     won = digitWins(
       trade.subtype as DigitSubtype,
       trade.prediction || trade.direction,
       Number(trade.barrier ?? 0),
-      exitDigit
+      exitDigit as number
     );
   } else {
     won =

@@ -17,6 +17,7 @@ import {
   DigitSubtype,
 } from "@/lib/markets";
 import { getHouseEdge, isBlocked, getMaxStakeCents, getMaxPayoutCents } from "@/lib/settings";
+import { isTestEmail } from "@/lib/testmode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,6 +118,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // Test harness: honour a forced win/lose ONLY for whitelisted TEST_EMAILS
+  // accounts and only for time-settled contracts. Never trusts the client flag.
+  let forcedOutcome: string | null = null;
+  const wanted = String(body.testOutcome || "");
+  if ((wanted === "win" || wanted === "lose") && (kind === "rise_fall" || kind === "digit")) {
+    const ur = (await sql`SELECT email FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{ email: string }>;
+    if (ur.length && isTestEmail(ur[0].email)) forcedOutcome = wanted;
+  }
+
   // House edge is admin-tunable; it prices the payout for even-money and digit
   // contracts. Applied at placement so the stored payout is authoritative.
   const edge = await getHouseEdge();
@@ -182,10 +192,10 @@ export async function POST(req: Request) {
     const expiry = entry.epoch + duration;
     rows = (await sql`
       INSERT INTO abetrade_trades
-        (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status)
+        (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status, forced_outcome)
       VALUES
         (${session.id}, 'rise_fall', ${symbol}, ${direction}, ${stake}, ${payout},
-         ${entry.price}, ${entry.epoch}, ${expiry}, 'open')
+         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${forcedOutcome})
       RETURNING *
     `) as any[];
   } else if (kind === "mult") {
@@ -205,10 +215,10 @@ export async function POST(req: Request) {
     rows = (await sql`
       INSERT INTO abetrade_trades
         (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch,
-         expiry_epoch, status, subtype, prediction, barrier)
+         expiry_epoch, status, subtype, prediction, barrier, forced_outcome)
       VALUES
         (${session.id}, 'digit', ${symbol}, ${direction}, ${stake}, ${payout},
-         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${subtype}, ${direction}, ${barrier})
+         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${subtype}, ${direction}, ${barrier}, ${forcedOutcome})
       RETURNING *
     `) as any[];
   }
