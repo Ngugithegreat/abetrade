@@ -123,8 +123,11 @@ export async function POST(req: Request) {
   let forcedOutcome: string | null = null;
   const wanted = String(body.testOutcome || "");
   if ((wanted === "win" || wanted === "lose") && (kind === "rise_fall" || kind === "digit")) {
-    const ur = (await sql`SELECT email FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{ email: string }>;
-    if (ur.length && isTestEmail(ur[0].email)) forcedOutcome = wanted;
+    const ur = (await sql`SELECT email, is_test FROM abetrade_users WHERE id = ${session.id} LIMIT 1`) as Array<{
+      email: string;
+      is_test: boolean;
+    }>;
+    if (ur.length && (ur[0].is_test || isTestEmail(ur[0].email))) forcedOutcome = wanted;
   }
 
   // House edge is admin-tunable; it prices the payout for even-money and digit

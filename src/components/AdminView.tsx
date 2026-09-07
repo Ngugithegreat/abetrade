@@ -150,6 +150,9 @@ export function AdminView() {
         />
       </div>
 
+      {/* Test accounts (QA) */}
+      <TestAccountsCard accounts={data.testAccounts || []} onAction={post} />
+
       {/* Profitability simulator (projection only) */}
       <ProfitSimulator edge={Number(data.houseEdge ?? 0.05)} />
 
@@ -493,6 +496,97 @@ function RateCard({
 // Projection-only calculator: shows how house profit moves with win rate, edge,
 // stake and volume. It NEVER touches live trades — it just does the math so you
 // can see how a broker makes money. Safe to keep in production (it's read-only).
+function TestAccountsCard({
+  accounts,
+  onAction,
+}: {
+  accounts: { id: number; name: string; email: string }[];
+  onAction: (p: Record<string, unknown>) => Promise<Response>;
+}) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run(p: Record<string, unknown>) {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await onAction(p);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setErr(j.error || "Failed.");
+      } else if (p.action === "set_test" && p.value) {
+        setEmail("");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-bold">🧪 Test accounts (QA)</div>
+        {accounts.length > 0 && (
+          <button
+            onClick={() => run({ action: "clear_tests" })}
+            disabled={busy}
+            className="btn btn-ghost px-3 py-1.5 text-[11px] text-down"
+          >
+            Disable all (before launch)
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted">
+        Add a team member’s account email to give it a <b>Force Win / Force Lose</b> control on the
+        Trade page — so you can test winning and losing on purpose. Only these accounts are affected;
+        real users never see it. <b>Disable all before going live.</b>
+      </p>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input
+          className="input flex-1"
+          placeholder="team-member@email.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && email.trim() && run({ action: "set_test", email, value: true })}
+        />
+        <button
+          onClick={() => email.trim() && run({ action: "set_test", email, value: true })}
+          disabled={busy || !email.trim()}
+          className="btn btn-brand shrink-0 px-4 py-2.5 text-sm"
+        >
+          Enable test mode
+        </button>
+      </div>
+      {err && <p className="mt-2 text-xs text-down">{err}</p>}
+
+      {accounts.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {accounts.map((a) => (
+            <div
+              key={a.id}
+              className="flex items-center justify-between rounded-xl border border-gold/30 bg-gold/5 px-3 py-2 text-xs"
+            >
+              <span>
+                <span className="font-semibold">{a.name}</span>{" "}
+                <span className="text-muted">· {a.email}</span>
+              </span>
+              <button
+                onClick={() => run({ action: "set_test", email: a.email, value: false })}
+                disabled={busy}
+                className="text-[11px] font-semibold text-down hover:underline"
+              >
+                Disable
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfitSimulator({ edge }: { edge: number }) {
   const [stake, setStake] = useState(10);
   const [trades, setTrades] = useState(500);

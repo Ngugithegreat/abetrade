@@ -14,7 +14,7 @@ export async function GET() {
   await ensureSchema();
   const sql = db();
 
-  const [pending, users, kpi, daily, topUsers, kycPending] = await Promise.all([
+  const [pending, users, kpi, daily, topUsers, kycPending, testAccounts] = await Promise.all([
     sql`
       SELECT t.*, u.email, u.name AS user_name
       FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
@@ -63,6 +63,7 @@ export async function GET() {
       ORDER BY kyc_submitted_at ASC NULLS LAST
       LIMIT 50
     ` as Promise<any[]>,
+    sql`SELECT id, name, email FROM abetrade_users WHERE is_test = true ORDER BY email` as Promise<any[]>,
   ]);
 
   const [houseEdge, referralPct, maxStakeCents, maxPayoutCents] = await Promise.all([
@@ -100,6 +101,7 @@ export async function GET() {
     referralPct, // fraction, e.g. 0.10
     maxStakeCents,
     maxPayoutCents,
+    testAccounts,
     kyc: kycPending.map((u) => ({
       id: u.id,
       name: u.name,

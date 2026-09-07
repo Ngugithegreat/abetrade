@@ -122,6 +122,10 @@ export async function ensureSchema(): Promise<void> {
   // Bonus funds that must be wagered (staked) before they can be withdrawn.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS bonus_locked BIGINT NOT NULL DEFAULT 0`;
 
+  // Admin-managed test accounts (QA). Enables the Force Win/Lose control for the
+  // account. Clear all before launch.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false`;
+
   // Referrals: who referred this user, and whether their first-deposit reward paid.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referred_by INTEGER`;
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS referral_rewarded BOOLEAN NOT NULL DEFAULT false`;

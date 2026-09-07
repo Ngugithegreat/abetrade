@@ -61,6 +61,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, maxPayoutCents: v });
   }
 
+  // ---- Test accounts (QA): enable/disable Force Win/Lose for an email ----
+  if (action === "set_test") {
+    const email = String(body.email || "").trim().toLowerCase();
+    const value = !!body.value;
+    if (!email) return NextResponse.json({ error: "Enter an email." }, { status: 400 });
+    const r = (await sql`
+      UPDATE abetrade_users SET is_test = ${value} WHERE lower(email) = ${email} RETURNING id
+    `) as any[];
+    if (!r.length) return NextResponse.json({ error: "No account with that email." }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  }
+  if (action === "clear_tests") {
+    await sql`UPDATE abetrade_users SET is_test = false WHERE is_test = true`;
+    return NextResponse.json({ ok: true });
+  }
+
   // ---- Account controls ----
   if (action === "block_user" || action === "unblock_user") {
     const userId = Number(body.userId);
