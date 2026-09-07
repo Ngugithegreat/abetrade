@@ -49,6 +49,7 @@ export type AppUser = {
   role: "user" | "admin";
   balance: number;
   country: string | null;
+  phone?: string | null;
   account_no?: string;
   status?: string;
   kyc_status?: string;

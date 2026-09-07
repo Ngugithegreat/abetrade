@@ -79,13 +79,14 @@ export async function creditPendingDeposit(
 
 export async function rejectPendingDeposit(
   providerRef: string,
-  note = "Payment failed"
+  _note = "Payment failed"
 ): Promise<void> {
   if (!providerRef) return;
   const sql = db();
+  // A cancelled/failed deposit was never credited — just drop the record so we
+  // don't keep abandoned pending deposits around.
   await sql`
-    UPDATE abetrade_transactions
-    SET status = 'rejected', note = ${note}
+    DELETE FROM abetrade_transactions
     WHERE provider_ref = ${providerRef} AND type = 'deposit' AND status = 'pending'
   `;
 }

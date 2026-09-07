@@ -126,6 +126,7 @@ export function WalletView() {
               rate={rate}
               methodIds={depositMethods(country)}
               mpesaAutomated={!!config?.mpesaDeposit}
+              defaultPhone={user?.phone ?? null}
               config={config}
               refresh={refresh}
               onDone={(newBal) => {
@@ -140,6 +141,7 @@ export function WalletView() {
               rate={rate}
               methodIds={withdrawMethods(country)}
               mpesaAutomated={!!config?.mpesaWithdraw}
+              defaultPhone={user?.phone ?? null}
               config={config}
               refresh={refresh}
               onDone={(newBal) => {
@@ -371,6 +373,7 @@ function KycCard({ user, refresh }: { user: AppUser; refresh: () => Promise<void
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   if (status === "approved") {
     return (
@@ -426,12 +429,21 @@ function KycCard({ user, refresh }: { user: AppUser; refresh: () => Promise<void
 
   return (
     <div className="card p-5">
-      <div className="flex items-center gap-2 text-sm font-bold">
-        <ShieldAlert className="h-4 w-4 text-brand" /> Verify your identity
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <ShieldAlert className="h-4 w-4 text-brand" /> Verify your identity
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            Required for withdrawals of $200 or more. Verify once and it's done for good.
+          </p>
+        </div>
+        {!open && (
+          <button onClick={() => setOpen(true)} className="btn btn-brand shrink-0 px-4 py-2.5 text-sm">
+            {status === "rejected" ? "Resubmit verification" : "Verify identity"}
+          </button>
+        )}
       </div>
-      <p className="mt-1 text-xs text-muted">
-        Required for withdrawals of $200 or more. Verify once and it's done for good.
-      </p>
 
       {status === "rejected" && user.kyc_reason && (
         <div className="mt-3 rounded-xl border border-down/40 bg-down/10 px-3 py-2 text-xs text-down">
@@ -439,15 +451,24 @@ function KycCard({ user, refresh }: { user: AppUser; refresh: () => Promise<void
         </div>
       )}
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
-        <input className="input" placeholder="Full legal name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input className="input" placeholder="ID / passport no." value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
-        <input className="input" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
-      </div>
-      {err && <p className="mt-2 text-xs text-down">{err}</p>}
-      <button onClick={submit} disabled={busy} className="btn btn-brand mt-3 px-5 py-2.5 text-sm">
-        {busy ? "Submitting…" : "Submit for verification"}
-      </button>
+      {open && (
+        <>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <input className="input" placeholder="Full legal name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="input" placeholder="ID / passport no." value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
+            <input className="input" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </div>
+          {err && <p className="mt-2 text-xs text-down">{err}</p>}
+          <div className="mt-3 flex gap-2">
+            <button onClick={submit} disabled={busy} className="btn btn-brand px-5 py-2.5 text-sm">
+              {busy ? "Submitting…" : "Submit for verification"}
+            </button>
+            <button onClick={() => setOpen(false)} className="btn btn-ghost px-4 py-2.5 text-sm">
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -526,6 +547,7 @@ function MoneyForm({
   rate,
   methodIds,
   mpesaAutomated,
+  defaultPhone,
   config,
   refresh,
   onDone,
@@ -535,6 +557,7 @@ function MoneyForm({
   rate: number;
   methodIds: string[];
   mpesaAutomated: boolean;
+  defaultPhone?: string | null;
   config: import("./app-context").AppConfig | null;
   refresh: () => Promise<void>;
   onDone: (newBalance: number | null) => void;
@@ -567,15 +590,20 @@ function MoneyForm({
   const isHostedDeposit = kind === "deposit" && gatewayReady;
   const showReference = kind === "withdraw" || (kind === "deposit" && !isHostedDeposit);
 
-  // Remember the last phone number (editable). Prefill it for phone methods.
+  // Prefill the phone for phone methods: the number the user saved on this
+  // device wins, otherwise fall back to the phone they gave at signup.
   useEffect(() => {
     if (!needsPhone || reference) return;
     try {
       const saved = localStorage.getItem("st_phone");
-      if (saved) setReference(saved);
+      if (saved) {
+        setReference(saved);
+        return;
+      }
     } catch {
       /* ignore */
     }
+    if (defaultPhone) setReference(defaultPhone);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [method]);
 

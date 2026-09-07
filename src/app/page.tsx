@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { LandingChart } from "@/components/LandingChart";
+import { HeroVisual } from "@/components/HeroVisual";
 import { RotatingWord } from "@/components/RotatingWord";
 import { MARKETS, PAYOUT_MULTIPLIER } from "@/lib/markets";
 
@@ -32,7 +32,7 @@ export default function Landing() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Link href="/login" className="btn btn-ghost px-4 py-2 text-sm">
+          <Link href="/login" className="btn btn-ghost hidden px-4 py-2 text-sm sm:inline-flex">
             Sign in
           </Link>
           <Link href="/register" className="btn btn-brand px-4 py-2 text-sm">
@@ -76,7 +76,7 @@ export default function Landing() {
         </div>
 
         <div className="animate-fade-up [animation-delay:120ms]">
-          <LandingChart />
+          <HeroVisual />
         </div>
       </section>
 

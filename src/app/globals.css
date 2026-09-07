@@ -72,6 +72,9 @@ body {
   background: rgba(124, 92, 255, 0.35);
 }
 
+/* Component classes live in the components layer so Tailwind utilities
+   (hidden, responsive display, rounded-*, etc.) always override them. */
+@layer components {
 .card {
   position: relative;
   background:
@@ -155,6 +158,7 @@ body {
 .panel {
   background: var(--ghost);
   border: 1px solid rgb(var(--border));
+}
 }
 
 /* Ambient drifting blobs for the landing background */

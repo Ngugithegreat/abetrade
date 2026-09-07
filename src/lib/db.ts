@@ -92,6 +92,8 @@ export async function ensureSchema(): Promise<void> {
   `;
   // Country selected at signup — drives which deposit rails the user sees.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS country TEXT`;
+  // Phone captured at signup, prefilled on the deposit/withdraw forms.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS phone TEXT`;
 
   // Provider correlation columns for automated M-Pesa (added idempotently so
   // existing databases upgrade cleanly).

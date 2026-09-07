@@ -14,6 +14,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [country, setCountry] = useState("KE");
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,7 +39,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           kind === "signup"
-            ? { name, email, password, country, ref: ref || undefined }
+            ? { name, email, password, phone: phone || undefined, country, ref: ref || undefined }
             : { email, password }
         ),
       });
@@ -94,6 +95,8 @@ export function AuthCard({ initial }: { initial: Mode }) {
               {...shared}
               name={name}
               setName={setName}
+              phone={phone}
+              setPhone={setPhone}
               country={country}
               setCountry={setCountry}
               referral={ref}
@@ -120,6 +123,8 @@ export function AuthCard({ initial }: { initial: Mode }) {
               {...shared}
               name={name}
               setName={setName}
+              phone={phone}
+              setPhone={setPhone}
               country={country}
               setCountry={setCountry}
               referral={ref}
@@ -227,6 +232,8 @@ function SignUpForm(
   p: SharedProps & {
     name: string;
     setName: (v: string) => void;
+    phone: string;
+    setPhone: (v: string) => void;
     country: string;
     setCountry: (v: string) => void;
     referral?: string;
@@ -256,6 +263,15 @@ function SignUpForm(
         placeholder="Email"
         value={p.email}
         onChange={(e) => p.setEmail(e.target.value)}
+        required
+      />
+      <input
+        className="input"
+        type="tel"
+        inputMode="tel"
+        placeholder="Phone number"
+        value={p.phone}
+        onChange={(e) => p.setPhone(e.target.value)}
         required
       />
       <input

@@ -22,18 +22,6 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from 
 import { money, shortTime } from "@/lib/format";
 import { AdminSkeleton } from "./Skeleton";
 
-type Pending = {
-  id: number;
-  user_id: number;
-  type: string;
-  amount: number;
-  method: string | null;
-  reference: string | null;
-  email: string;
-  user_name: string;
-  created_at: string;
-};
-
 type Player = {
   id: number;
   name: string;
@@ -52,7 +40,6 @@ export function AdminView() {
   const [data, setData] = useState<any>(null);
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin", { cache: "no-store" });
@@ -82,21 +69,11 @@ export function AdminView() {
     [load]
   );
 
-  async function act(id: number, action: "approve" | "reject") {
-    setBusyId(id);
-    try {
-      await post({ id, action });
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   if (forbidden)
     return <div className="card p-8 text-center text-muted">You don’t have access to the admin panel.</div>;
   if (loading || !data) return <AdminSkeleton />;
 
   const k = data.kpi;
-  const pending: Pending[] = data.pending || [];
   const players: Player[] = data.topUsers || [];
   const daily = (data.daily || []).map((d: any) => ({
     label: new Date(d.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -169,9 +146,6 @@ export function AdminView() {
       {/* Test accounts (QA) */}
       <TestAccountsCard accounts={data.testAccounts || []} onAction={post} />
 
-      {/* Profitability simulator (projection only) */}
-      <ProfitSimulator edge={Number(data.houseEdge ?? 0.05)} />
-
       {/* Volume chart */}
       <div className="card p-5">
         <div className="mb-3 text-sm font-bold">Trade volume · last 14 days</div>
@@ -201,39 +175,6 @@ export function AdminView() {
                 </defs>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-
-      {/* Pending */}
-      <div className="card overflow-hidden">
-        <div className="border-b border-border px-5 py-3 font-bold">Pending requests ({pending.length})</div>
-        {pending.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted">Nothing waiting. You’re all caught up.</div>
-        ) : (
-          <div className="divide-y divide-border">
-            {pending.map((p) => (
-              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${p.type === "deposit" ? "bg-up/15 text-up" : "bg-gold/15 text-gold"}`}>
-                      {p.type}
-                    </span>
-                    <span className="tabular">{money(Math.abs(Number(p.amount)))}</span>
-                  </div>
-                  <div className="text-xs text-muted">{p.user_name} · {p.email}</div>
-                  <div className="text-[11px] text-muted">{p.method} · {p.reference || "—"} · {shortTime(p.created_at)}</div>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => act(p.id, "approve")} disabled={busyId === p.id} className="btn py-1.5 px-3 text-xs text-white" style={{ background: "linear-gradient(180deg,#00e396,#00b877)" }}>
-                    <Check className="h-3.5 w-3.5" /> Approve
-                  </button>
-                  <button onClick={() => act(p.id, "reject")} disabled={busyId === p.id} className="btn btn-ghost py-1.5 px-3 text-xs text-down">
-                    <X className="h-3.5 w-3.5" /> Reject
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
         )}
       </div>
@@ -743,100 +684,6 @@ function TestAccountRow({
         >
           Disable
         </button>
-      </div>
-    </div>
-  );
-}
-
-function ProfitSimulator({ edge }: { edge: number }) {
-  const [stake, setStake] = useState(10);
-  const [trades, setTrades] = useState(500);
-  const [winRate, setWinRate] = useState(48);
-  const [edgePct, setEdgePct] = useState(Math.round(edge * 100));
-  const [days, setDays] = useState(30);
-
-  const mult = Math.max(1.05, 2 * (1 - edgePct / 100)); // even-money payout
-  const totalTrades = trades * days;
-  const staked = stake * totalTrades;
-  const wins = (winRate / 100) * totalTrades;
-  const paid = wins * stake * mult;
-  const housePnl = staked - paid;
-  const breakeven = (100 / mult).toFixed(1); // win rate where house breaks even
-
-  const fmt = (n: number) =>
-    (n < 0 ? "-$" : "$") + Math.abs(Math.round(n)).toLocaleString("en-US");
-
-  const Row = ({ label, value, onChange, min, max, step, suffix }: any) => (
-    <div>
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-muted">{label}</span>
-        <span className="tabular font-semibold">
-          {value}
-          {suffix}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-1 w-full accent-[color:rgb(var(--brand))]"
-      />
-    </div>
-  );
-
-  return (
-    <div className="card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-bold">
-          <Activity className="h-4 w-4 text-brand" /> Profitability simulator
-        </div>
-        <span className="rounded-md bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase text-gold">
-          Projection only · doesn’t affect live trades
-        </span>
-      </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted">
-        Drag the sliders to see how the house does. Players win any single trade, but because
-        payouts are priced below fair (the edge), the house profits over volume — unless the win
-        rate climbs above the break-even line.
-      </p>
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div className="space-y-3">
-          <Row label="Avg stake" value={stake} onChange={setStake} min={1} max={500} step={1} suffix=" $" />
-          <Row label="Trades / day" value={trades} onChange={setTrades} min={10} max={5000} step={10} suffix="" />
-          <Row label="Player win rate" value={winRate} onChange={setWinRate} min={30} max={65} step={1} suffix="%" />
-          <Row label="House edge" value={edgePct} onChange={setEdgePct} min={0} max={20} step={1} suffix="%" />
-          <Row label="Period" value={days} onChange={setDays} min={1} max={90} step={1} suffix=" days" />
-        </div>
-        <div className="flex flex-col justify-center gap-3 rounded-xl border border-border bg-surface2/50 p-4">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider text-muted">Projected house P&amp;L</div>
-            <div className={`tabular text-3xl font-black ${housePnl >= 0 ? "text-up" : "text-down"}`}>
-              {fmt(housePnl)}
-            </div>
-            <div className="text-[11px] text-muted">
-              over {totalTrades.toLocaleString("en-US")} trades ({fmt(staked)} staked)
-            </div>
-          </div>
-          <div className="border-t border-border pt-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-muted">Even-money payout</span>
-              <span className="tabular font-semibold">{mult.toFixed(2)}×</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Break-even win rate</span>
-              <span className="tabular font-semibold text-gold">{breakeven}%</span>
-            </div>
-            <div className="mt-1 text-[11px] text-muted">
-              {winRate < Number(breakeven)
-                ? "Players win less than break-even → the house wins long-term. ✅"
-                : "Players win above break-even → the house loses. ⚠️ Lower the win rate or raise the edge."}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
