@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useApp, Trade, Txn } from "./app-context";
 import { marketBySymbol } from "@/lib/markets";
 import { money, shortTime } from "@/lib/format";
-import { ArrowUp, ArrowDown, ArrowDownToLine, ArrowUpFromLine, Gift } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 
 type Tab = "trades" | "transactions";
 type TradeFilter = "all" | "rise_fall" | "digit" | "mult";
@@ -172,8 +172,10 @@ function TradeRow({ t }: { t: Trade }) {
 
 function TxnRow({ x }: { x: Txn }) {
   const isCredit = Number(x.amount) >= 0;
-  const kind = x.type;
-  const Icon = kind === "withdrawal" ? ArrowUpFromLine : kind === "bonus" ? Gift : ArrowDownToLine;
+  // Bonus credits appear to the user as a normal deposit.
+  const kind = x.type === "bonus" ? "deposit" : x.type;
+  const showMethod = x.type !== "bonus";
+  const Icon = kind === "withdrawal" ? ArrowUpFromLine : ArrowDownToLine;
   const statusColor =
     x.status === "completed" ? "text-up" : x.status === "rejected" ? "text-down" : "text-gold";
   return (
@@ -184,7 +186,7 @@ function TxnRow({ x }: { x: Txn }) {
         </div>
         <div>
           <div className="text-sm font-semibold capitalize">
-            {kind} <span className="font-normal text-muted">{x.method || ""}</span>
+            {kind} <span className="font-normal text-muted">{showMethod ? x.method || "" : ""}</span>
           </div>
           <div className="tabular text-[11px] text-muted">
             {x.reference ? `${x.reference} · ` : ""}

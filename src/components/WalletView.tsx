@@ -907,8 +907,8 @@ function TxnList({ txns }: { txns: Txn[] }) {
             <TxnIcon type={t.type} />
             <div>
               <div className="text-sm font-medium capitalize">
-                {t.type.replace("_", " ")}
-                {t.method ? (
+                {t.type === "bonus" ? "Deposit" : t.type.replace("_", " ")}
+                {t.method && t.type !== "bonus" ? (
                   <span className="text-muted"> · {t.method}</span>
                 ) : null}
               </div>
@@ -933,7 +933,7 @@ function TxnList({ txns }: { txns: Txn[] }) {
 
 function TxnIcon({ type }: { type: string }) {
   const cls = "h-4 w-4";
-  if (type === "deposit") return <ArrowDownToLine className={`${cls} text-up`} />;
+  if (type === "deposit" || type === "bonus") return <ArrowDownToLine className={`${cls} text-up`} />;
   if (type === "withdrawal") return <ArrowUpFromLine className={`${cls} text-gold`} />;
   if (type === "trade_payout") return <TrendingUp className={`${cls} text-up`} />;
   if (type === "trade_stake") return <TrendingDown className={`${cls} text-down`} />;

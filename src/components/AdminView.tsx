@@ -307,26 +307,25 @@ export function AdminView() {
         </div>
       </div>
 
-      {/* Danger zone */}
-      <div className="card border border-down/30 p-5">
+      {/* Reset deposit ledger */}
+      <div className="card p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-bold text-down">Danger zone · reset for launch</div>
+            <div className="text-sm font-bold">Reset deposit history</div>
             <p className="mt-1 max-w-xl text-[11px] leading-relaxed text-muted">
-              Wipes all test activity: deletes every trade and transaction and resets every balance to
-              $0. Users keep their logins. After this, Deposits shows $0 so any real deposit stands out.
-              This can’t be undone.
+              Clears the deposit records so the Deposits total goes to $0 — any real deposit after this
+              stands out. Balances, trades and everything else are untouched.
             </p>
           </div>
           <button
             onClick={() => {
-              if (window.confirm("Delete ALL trades & transactions and reset every balance to $0? This cannot be undone.")) {
-                post({ action: "reset_data" });
+              if (window.confirm("Clear all deposit records and set the Deposits total to $0? (Balances are not changed.)")) {
+                post({ action: "reset_deposits" });
               }
             }}
-            className="btn btn-ghost shrink-0 border border-down/40 px-4 py-2.5 text-sm text-down"
+            className="btn btn-ghost shrink-0 border border-border px-4 py-2.5 text-sm"
           >
-            Reset all data
+            Reset deposits
           </button>
         </div>
       </div>
