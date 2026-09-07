@@ -112,6 +112,9 @@ export function WalletView() {
         </div>
       )}
 
+      {/* Refer & earn — kept near the top so it's easy to find */}
+      {data?.referral && <ReferralCard referral={data.referral} />}
+
       <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
         {/* Money form */}
         <div className="card p-5">
@@ -172,7 +175,6 @@ export function WalletView() {
       </div>
 
       {user && <KycCard user={user} refresh={refresh} />}
-      {data?.referral && <ReferralCard referral={data.referral} />}
     </div>
   );
 }
