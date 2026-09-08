@@ -59,11 +59,36 @@ export function DigitHeatmap({
               isSel ? "bg-brand/10 ring-1 ring-brand" : ""
             } ${onPick ? "cursor-pointer hover:bg-surface2" : "cursor-default"}`}
           >
-            <div className={`relative h-8 w-8 sm:h-12 sm:w-12 ${isFlash ? "animate-pulse" : ""}`}>
+            <div
+              className={`relative h-8 w-8 transition-transform duration-200 sm:h-12 sm:w-12 ${
+                isFlash ? "z-10 scale-125" : ""
+              }`}
+            >
+              {/* WON/LOST pill + caret above the settled digit */}
+              {isFlash && (
+                <>
+                  <span
+                    className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-white shadow-card sm:text-[9px]"
+                    style={{ background: flashColor }}
+                  >
+                    {flash!.won ? "Won" : "Lost"}
+                  </span>
+                  <span
+                    className="absolute -top-1.5 left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-t-[6px] border-x-transparent"
+                    style={{ borderTopColor: flashColor }}
+                  />
+                </>
+              )}
               {isCurrent && !isFlash && (
                 <span className="absolute -top-2 left-1/2 h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-brand" />
               )}
               <svg viewBox="0 0 40 40" className="h-8 w-8 sm:h-12 sm:w-12">
+                {isFlash && (
+                  <circle cx="20" cy="20" r={R + 3} fill={flashColor} fillOpacity={0.14}>
+                    <animate attributeName="r" values={`${R};${R + 4};${R}`} dur="0.9s" repeatCount="indefinite" />
+                    <animate attributeName="fill-opacity" values="0.22;0.05;0.22" dur="0.9s" repeatCount="indefinite" />
+                  </circle>
+                )}
                 <circle cx="20" cy="20" r={R} fill="none" stroke="rgb(var(--border))" strokeWidth="3.5" />
                 <circle
                   cx="20"
@@ -71,14 +96,14 @@ export function DigitHeatmap({
                   r={R}
                   fill="none"
                   stroke={stroke}
-                  strokeWidth="3.5"
+                  strokeWidth={isFlash ? 4.5 : 3.5}
                   strokeLinecap="round"
                   strokeDasharray={C}
                   strokeDashoffset={isFlash ? 0 : C * (1 - Math.max(0.04, frac))}
                   transform="rotate(-90 20 20)"
                   style={
                     isFlash
-                      ? { filter: `drop-shadow(0 0 6px ${flashColor})` }
+                      ? { filter: `drop-shadow(0 0 8px ${flashColor})` }
                       : isCurrent
                       ? { filter: `drop-shadow(0 0 4px rgba(${BRAND_RGB},0.6))` }
                       : undefined
@@ -89,8 +114,8 @@ export function DigitHeatmap({
                   y="20"
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize="14"
-                  fontWeight="700"
+                  fontSize={isFlash ? 17 : 14}
+                  fontWeight={isFlash ? 800 : 700}
                   fill={isFlash ? flashColor : isCurrent ? BRAND_HEX : "rgb(var(--fg))"}
                 >
                   {d}
