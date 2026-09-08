@@ -71,31 +71,24 @@ export async function POST(req: Request) {
   }
 
   // Must-trade rule: you can't deposit and cash straight back out — you have to
-  // TRADE first. Require lifetime trading turnover (real staked) to be at least
-  // your lifetime deposits before any withdrawal. Winnings are withdrawable once
-  // you've traded; locked bonus can never be withdrawn.
+  // place at least ONE trade first. Any single real trade unlocks withdrawals.
+  // (Locked bonus can still never be withdrawn.)
   const flow = (await sql`
     SELECT
       balance,
       COALESCE(bonus_locked, 0) AS bonus_locked,
-      COALESCE((SELECT SUM(amount) FROM abetrade_transactions
-                 WHERE user_id = ${session.id} AND type = 'deposit'
-                   AND status = 'completed' AND is_demo = false), 0) AS deposited,
-      COALESCE((SELECT SUM(-amount) FROM abetrade_transactions
-                 WHERE user_id = ${session.id} AND type = 'trade_stake'
-                   AND is_demo = false), 0) AS staked
+      COALESCE((SELECT COUNT(*) FROM abetrade_trades
+                 WHERE user_id = ${session.id} AND is_demo = false), 0) AS trades
     FROM abetrade_users WHERE id = ${session.id} LIMIT 1
-  `) as Array<{ balance: string | number; bonus_locked: string | number; deposited: string | number; staked: string | number }>;
+  `) as Array<{ balance: string | number; bonus_locked: string | number; trades: string | number }>;
   const bal = Number(flow[0]?.balance ?? 0);
   const locked = Number(flow[0]?.bonus_locked ?? 0);
-  const deposited = Number(flow[0]?.deposited ?? 0);
-  const staked = Number(flow[0]?.staked ?? 0);
+  const trades = Number(flow[0]?.trades ?? 0);
 
-  if (staked < deposited) {
-    const needMore = (deposited - staked) / 100;
+  if (trades < 1) {
     return NextResponse.json(
       {
-        error: `Trade before withdrawing. ${BRAND_NAME} is not a banking service — place trades worth about $${needMore.toFixed(2)} more to unlock withdrawals.`,
+        error: `Place at least one trade before withdrawing — ${BRAND_NAME} is a trading platform, so open a trade first, then you can withdraw.`,
       },
       { status: 403 }
     );
