@@ -135,6 +135,21 @@ export function TradeTerminal() {
   const settled = closed.filter((t) => t.status !== "open").length;
   const winRate = settled ? Math.round((wins / settled) * 100) : 0;
 
+  // Switching between Real and Demo swaps the whole trade list. Reset the
+  // settle trackers so the new account's feedback (sound + result flash +
+  // settled cards) starts clean — otherwise the refs still point at the other
+  // account's trades and the first Demo settlements get swallowed as "already
+  // seen", which is what made Demo feel silent. Demo gets the exact same live
+  // experience as Real; only the funds differ.
+  useEffect(() => {
+    lastClosedRef.current = null;
+    seenClosedRef.current = new Set();
+    closedInitRef.current = false;
+    setResultFlash(null);
+    setFlashDigit(null);
+    setSettledFlash([]);
+  }, [demo]);
+
   // Premium feedback: when a new trade settles, celebrate a win (confetti +
   // chime) or give a clean shake on a loss.
   useEffect(() => {
