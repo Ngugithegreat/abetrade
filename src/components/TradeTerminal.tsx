@@ -400,6 +400,26 @@ export function TradeTerminal() {
   // AUTO bot supports time-settled contracts only (Rise/Fall + Digits).
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
+  const [resettingDemo, setResettingDemo] = useState(false);
+  async function resetDemo() {
+    setResettingDemo(true);
+    try {
+      const res = await fetch("/api/demo/reset", { method: "POST" });
+      const json = await res.json();
+      if (res.ok) {
+        if (typeof json.demoBalance === "number") setBalance(json.demoBalance);
+        await refresh();
+        showToast("Demo balance reset to $10,000", true);
+      } else {
+        showToast(json.error || "Could not reset demo.", false);
+      }
+    } catch {
+      showToast("Network error resetting demo.", false);
+    } finally {
+      setResettingDemo(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
       <EntryScanner
@@ -609,7 +629,16 @@ export function TradeTerminal() {
 
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-muted">Stake (USD)</label>
-              <span className="flex items-center gap-1 text-[11px] text-muted">
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                {demo && (
+                  <button
+                    onClick={resetDemo}
+                    disabled={resettingDemo}
+                    className="rounded-md border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[10px] font-semibold text-gold transition hover:bg-gold/20 disabled:opacity-50"
+                  >
+                    {resettingDemo ? "…" : "Reset demo"}
+                  </button>
+                )}
                 <Wallet className="h-3 w-3" /> {loading ? "—" : money(balance)}
               </span>
             </div>
@@ -720,12 +749,21 @@ export function TradeTerminal() {
             {!stakeValid && stakeNum > 0 && (
               <p className="mt-2 text-center text-xs text-down">
                 {stakeCents > balance ? (
-                  <>
-                    Not enough balance —{" "}
-                    <Link href="/wallet" className="underline">
-                      deposit
-                    </Link>
-                  </>
+                  demo ? (
+                    <>
+                      Not enough demo funds —{" "}
+                      <button onClick={resetDemo} disabled={resettingDemo} className="underline">
+                        {resettingDemo ? "resetting…" : "reset to $10,000"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Not enough balance —{" "}
+                      <Link href="/wallet" className="underline">
+                        deposit
+                      </Link>
+                    </>
+                  )
                 ) : stakeCents < MIN_STAKE ? (
                   "Below minimum ($0.50)."
                 ) : (
