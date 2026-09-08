@@ -146,12 +146,24 @@ export function digitWins(
   return prediction === "over" ? digit > barrier : digit < barrier;
 }
 
+// Integer hash (MurmurHash3 finalizer) — scatters sequential inputs so trade ids
+// n, n+1, n+2… map to uncorrelated, uniformly-spread outputs.
+function hashInt(n: number): number {
+  let x = Math.trunc(n) >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x45d9f3b) >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x45d9f3b) >>> 0;
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
 /**
  * For a FORCED (test/demo) digit outcome, pick a last digit that satisfies the
- * win/lose result — chosen deterministically from `seed` (the trade id) so the
- * client-steered chart and the server settlement agree, but the digit VARIES
- * across trades (instead of always being the first valid one, e.g. 0 for even),
- * making the sim feel real.
+ * win/lose result. Deterministic from `seed` (the trade id) so the client-steered
+ * chart and the server settlement agree — but HASHED, so consecutive trades don't
+ * walk the valid digits in order (1,3,5,7,9,…). The result looks like a real,
+ * unpredictable market rather than an obvious pattern.
  */
 export function pickForcedDigit(
   subtype: DigitSubtype,
@@ -163,7 +175,7 @@ export function pickForcedDigit(
   const valid: number[] = [];
   for (let d = 0; d < 10; d++) if (digitWins(subtype, prediction, barrier, d) === won) valid.push(d);
   if (!valid.length) return 0;
-  return valid[Math.abs(Math.trunc(seed)) % valid.length];
+  return valid[hashInt(seed) % valid.length];
 }
 
 // Stake limits (cents)
