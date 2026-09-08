@@ -437,13 +437,8 @@ function KycCard({ user, refresh }: { user: AppUser; refresh: () => Promise<void
   return (
     <div className="card p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2 text-sm font-bold">
-            <ShieldAlert className="h-4 w-4 text-brand" /> Verify your identity
-          </div>
-          <p className="mt-1 text-xs text-muted">
-            Required for withdrawals of $200 or more. Verify once and it's done for good.
-          </p>
+        <div className="flex items-center gap-2 text-sm font-bold">
+          <ShieldAlert className="h-4 w-4 text-brand" /> Verify your identity
         </div>
         {!open && (
           <button onClick={() => setOpen(true)} className="btn btn-brand shrink-0 px-4 py-2.5 text-sm">
