@@ -177,6 +177,12 @@ export default function Landing() {
             <Logo className="h-5 w-5" />
             <span className="font-semibold text-white">SinTrades</span>
           </div>
+          <div className="mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            <Link href="/how-it-works" className="hover:text-brand">How it works</Link>
+            <Link href="/payout-rules" className="hover:text-brand">Payout rules</Link>
+            <Link href="/login" className="hover:text-brand">Sign in</Link>
+            <Link href="/register" className="hover:text-brand">Create account</Link>
+          </div>
           <p className="mx-auto max-w-2xl">
             Trading volatility indices involves risk and may not be suitable for
             everyone. Only trade with money you can afford to lose. Prices are

@@ -19,6 +19,7 @@ export type Txn = {
   method: string | null;
   reference: string | null;
   note: string | null;
+  receipt?: string | null;
   created_at: string;
   is_demo?: boolean;
 };

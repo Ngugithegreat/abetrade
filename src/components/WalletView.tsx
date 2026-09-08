@@ -841,33 +841,85 @@ function TxnList({ txns }: { txns: Txn[] }) {
   return (
     <div className="divide-y divide-border">
       {txns.map((t) => (
-        <div key={t.id} className="flex items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-3">
-            <TxnIcon type={t.type} />
-            <div>
-              <div className="text-sm font-medium capitalize">
-                {t.type === "bonus" ? "Deposit" : t.type.replace("_", " ")}
-                {t.method && t.type !== "bonus" ? (
-                  <span className="text-muted"> · {t.method}</span>
-                ) : null}
+        <div key={t.id} className="px-5 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <TxnIcon type={t.type} />
+              <div>
+                <div className="text-sm font-medium capitalize">
+                  {t.type === "bonus" ? "Deposit" : t.type.replace("_", " ")}
+                  {t.method && t.type !== "bonus" ? (
+                    <span className="text-muted"> · {t.method}</span>
+                  ) : null}
+                </div>
+                <div className="text-[11px] text-muted">{shortTime(t.created_at)}</div>
               </div>
-              <div className="text-[11px] text-muted">{shortTime(t.created_at)}</div>
+            </div>
+            <div className="text-right">
+              <div
+                className={`tabular text-sm font-bold ${
+                  Number(t.amount) >= 0 ? "text-up" : "text-fg"
+                }`}
+              >
+                {money(Number(t.amount), { sign: true })}
+              </div>
+              <StatusBadge status={t.status} />
             </div>
           </div>
-          <div className="text-right">
-            <div
-              className={`tabular text-sm font-bold ${
-                Number(t.amount) >= 0 ? "text-up" : "text-fg"
-              }`}
-            >
-              {money(Number(t.amount), { sign: true })}
-            </div>
-            <StatusBadge status={t.status} />
-          </div>
+          {t.type === "withdrawal" && <WithdrawalTrack status={t.status} receipt={t.receipt} />}
         </div>
       ))}
     </div>
   );
+}
+
+function WithdrawalTrack({ status, receipt }: { status: string; receipt?: string | null }) {
+  const done = status === "completed";
+  const rejected = status === "rejected";
+
+  if (rejected) {
+    return (
+      <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-down/30 bg-down/5 px-3 py-1.5 text-[11px] text-down">
+        <XCircle className="h-3.5 w-3.5" /> Payout didn’t go through — amount refunded to your balance.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-lg border border-border bg-surface2/40 px-3 py-2">
+      <div className="flex items-center">
+        <TrackStep label="Requested" done />
+        <TrackLine done />
+        <TrackStep label="Sent to M-Pesa" done />
+        <TrackLine done={done} />
+        <TrackStep label="Received" done={done} active={!done} />
+      </div>
+      {done && receipt && (
+        <div className="mt-1.5 text-[10px] text-muted">
+          M-Pesa receipt: <span className="tabular font-semibold text-fg">{receipt}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrackStep({ label, done, active }: { label: string; done?: boolean; active?: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span
+        className={`flex h-4 w-4 items-center justify-center rounded-full ${
+          done ? "bg-up text-white" : active ? "bg-gold/20 text-gold ring-1 ring-gold" : "bg-surface2 text-muted"
+        }`}
+      >
+        {done ? <Check className="h-2.5 w-2.5" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+      </span>
+      <span className={`text-[9px] ${done ? "text-fg" : active ? "text-gold" : "text-muted"}`}>{label}</span>
+    </div>
+  );
+}
+
+function TrackLine({ done }: { done?: boolean }) {
+  return <div className={`mb-4 h-0.5 flex-1 ${done ? "bg-up" : "bg-border"}`} />;
 }
 
 function TxnIcon({ type }: { type: string }) {
