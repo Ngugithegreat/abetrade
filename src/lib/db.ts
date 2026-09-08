@@ -174,6 +174,20 @@ export async function ensureSchema(): Promise<void> {
     )
   `;
 
+  // One-time backfill: mark every EXISTING account as email-verified, so the
+  // "verify your email" prompt only ever shows to brand-new signups (people who
+  // already have accounts shouldn't be nagged). Runs exactly once, guarded by a
+  // settings flag inserted atomically.
+  const backfill = (await sql`
+    INSERT INTO abetrade_settings (key, value, updated_at)
+    VALUES ('email_verify_backfilled', '1', now())
+    ON CONFLICT (key) DO NOTHING
+    RETURNING key
+  `) as Array<{ key: string }>;
+  if (backfill.length) {
+    await sql`UPDATE abetrade_users SET email_verified = true WHERE email_verified = false`;
+  }
+
   // Password-reset tokens (only the SHA-256 hash is stored; single-use, 1h TTL).
   await sql`
     CREATE TABLE IF NOT EXISTS abetrade_password_resets (

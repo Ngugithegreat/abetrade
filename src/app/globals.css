@@ -17,7 +17,19 @@
   --grid: #1a2030;
   --aurora1: rgba(124, 92, 255, 0.16);
   --aurora2: rgba(59, 130, 246, 0.1);
+  /* Brand accent (RGB channels) — drives every brand colour in the app. */
+  --brand: 124 92 255;
+  --brand-dark: 106 71 245;
+  --brand-light: 158 134 255;
   color-scheme: dark;
+}
+
+/* Alternate brand (Cryptonichub) — emerald→cyan to match its icon. */
+html.brand-alt {
+  --brand: 16 185 166;
+  --brand-dark: 8 145 178;
+  --brand-light: 45 225 181;
+  --aurora1: rgba(16, 185, 166, 0.16);
 }
 
 :root.light {
@@ -69,7 +81,7 @@ body {
   background: transparent;
 }
 ::selection {
-  background: rgba(124, 92, 255, 0.35);
+  background: rgb(var(--brand) / 0.35);
 }
 
 /* Component classes live in the components layer so Tailwind utilities
@@ -107,9 +119,9 @@ body {
 }
 
 .btn-brand {
-  background: linear-gradient(180deg, #8b6dff, #6a47f5);
+  background: linear-gradient(180deg, rgb(var(--brand-light)), rgb(var(--brand-dark)));
   color: #fff;
-  box-shadow: 0 8px 24px -10px rgba(124, 92, 255, 0.6),
+  box-shadow: 0 8px 24px -10px rgb(var(--brand) / 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 .btn-brand:hover:not(:disabled) {
@@ -139,8 +151,8 @@ body {
   color: rgb(var(--muted));
 }
 .input:focus {
-  border-color: #7c5cff;
-  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+  border-color: rgb(var(--brand));
+  box-shadow: 0 0 0 3px rgb(var(--brand) / 0.15);
 }
 
 .tabular {
@@ -148,7 +160,7 @@ body {
 }
 
 .text-gradient {
-  background: linear-gradient(90deg, #9e86ff, #7c5cff 40%, #5b8def);
+  background: linear-gradient(90deg, rgb(var(--brand-light)), rgb(var(--brand)) 40%, #5b8def);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

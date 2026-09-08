@@ -18,9 +18,9 @@ const config: Config = {
         fg: "rgb(var(--fg) / <alpha-value>)",
         // Fixed accents — read well on both themes.
         brand: {
-          DEFAULT: "#7C5CFF",
-          dark: "#6A47F5",
-          light: "#9E86FF",
+          DEFAULT: "rgb(var(--brand) / <alpha-value>)",
+          dark: "rgb(var(--brand-dark) / <alpha-value>)",
+          light: "rgb(var(--brand-light) / <alpha-value>)",
         },
         up: "#00E39A",
         down: "#FF4D6D",
@@ -41,9 +41,9 @@ const config: Config = {
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 60px -12px rgba(124, 92, 255, 0.55)",
+        glow: "0 0 60px -12px rgb(var(--brand) / 0.55)",
         card: "0 12px 40px -16px rgba(0,0,0,0.7)",
-        lift: "0 20px 50px -20px rgba(124, 92, 255, 0.35)",
+        lift: "0 20px 50px -20px rgb(var(--brand) / 0.35)",
       },
       keyframes: {
         "fade-up": {

@@ -88,11 +88,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // Anti-banking rule: SinTrades is a trading platform, not a wallet. You can't
-  // deposit and cash straight back out — you must actually trade first. We
-  // require lifetime trading turnover (total staked) to be at least your
-  // lifetime deposits before any withdrawal. Winnings are freely withdrawable;
-  // a fresh deposit unlocks only after it has been traded through.
+  // Anti-banking rule: this is a trading platform, not a wallet. You can't
+  // deposit and cash straight back out — you must actually TRADE first. We
+  // require lifetime trading turnover (total staked, real account) to be at
+  // least THREE TIMES lifetime deposits before any withdrawal is allowed.
+  // Winnings are freely withdrawable; every fresh deposit must be traded
+  // through (3×) before it can leave. Demo turnover doesn't count.
+  const WAGER_MULTIPLIER = 3;
   const flow = (await sql`
     SELECT
       COALESCE((SELECT SUM(amount) FROM abetrade_transactions
@@ -104,11 +106,12 @@ export async function POST(req: Request) {
   `) as Array<{ deposited: string | number; staked: string | number }>;
   const deposited = Number(flow[0]?.deposited ?? 0);
   const staked = Number(flow[0]?.staked ?? 0);
-  if (staked < deposited) {
-    const needMore = (deposited - staked) / 100;
+  const required = deposited * WAGER_MULTIPLIER;
+  if (staked < required) {
+    const needMore = (required - staked) / 100;
     return NextResponse.json(
       {
-        error: `Trade before withdrawing. Place trades worth about $${needMore.toFixed(2)} more to unlock cash-out — deposited funds can't be withdrawn until they've been traded.`,
+        error: `Withdrawals unlock after you trade. ${BRAND_NAME} is not a banking service — only deposit when you intend to trade. You need to place trades worth about $${needMore.toFixed(2)} more (deposits must be traded through ${WAGER_MULTIPLIER}× before they can be withdrawn).`,
       },
       { status: 403 }
     );
