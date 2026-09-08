@@ -321,8 +321,19 @@ export function TradeTerminal() {
     } else {
       const up = t.direction === "rise" || t.direction === "up";
       const wantHigher = (up && won) || (!up && !won);
-      const delta = Math.max(0.02, Math.abs(entry) * 0.004);
-      const target = wantHigher ? entry + delta : entry - delta;
+      let target: number;
+      if (t.kind === "mult" && !won && t.stop_out_price) {
+        // Losing multiplier: drive the price a hair PAST the stop-out so the
+        // position visibly reaches stop-out and auto-closes at a full loss,
+        // instead of hovering at a partial loss forever (multipliers have no
+        // expiry). Matches how a real broker force-closes a stopped-out trade.
+        const so = Number(t.stop_out_price);
+        const beyond = Math.max(0.02, Math.abs(entry) * 0.0008);
+        target = up ? so - beyond : so + beyond;
+      } else {
+        const delta = Math.max(0.02, Math.abs(entry) * 0.004);
+        target = wantHigher ? entry + delta : entry - delta;
+      }
       const deadline = Number(t.expiry_epoch) > nowSec ? Number(t.expiry_epoch) : nowSec + 25;
       // No tease for LOSING trades and for multipliers (which can be closed
       // early): the price sits firmly on the outcome side from entry, so a
@@ -1231,8 +1242,8 @@ function OpenPositions({ trades, settled = [], onSettled, liveSymbol, livePrice,
     })();
   }, [now, trades, onSettled]);
 
-  async function closeMult(id: number) {
-    setClosing(id);
+  async function closeMult(id: number, auto = false) {
+    if (!auto) setClosing(id);
     try {
       const res = await fetch("/api/trade/close", {
         method: "POST",
@@ -1240,18 +1251,48 @@ function OpenPositions({ trades, settled = [], onSettled, liveSymbol, livePrice,
         body: JSON.stringify({ id }),
       });
       const json = await res.json();
-      if (!res.ok) showToast(json.error || "Could not close.", false);
-      else {
+      if (!res.ok) {
+        if (auto) settling.current.delete(id); // let it retry next tick
+        else showToast(json.error || "Could not close.", false);
+      } else {
         if (typeof json.balance === "number") setBalance(json.balance);
-        showToast(json.trade?.status === "won" ? "Closed in profit" : "Position closed", json.trade?.status === "won");
+        const won = json.trade?.status === "won";
+        showToast(auto ? "Stopped out — position closed" : won ? "Closed in profit" : "Position closed", won);
         onSettled();
       }
     } catch {
-      showToast("Network error closing position.", false);
+      if (auto) settling.current.delete(id);
+      else showToast("Network error closing position.", false);
     } finally {
-      setClosing(null);
+      if (!auto) setClosing(null);
     }
   }
+
+  // Auto stop-out: the moment an open multiplier's live price reaches its
+  // stop-out level, force-close it — the max a multiplier can lose is its stake
+  // (the margin), so equity can never go negative. This mirrors a real broker
+  // and closes the position INSTANTLY on the chart the trader is watching,
+  // instead of waiting for the periodic server sweep (which also can't see the
+  // simulated price on test/demo trades). Guarded by `settling` so it fires once.
+  useEffect(() => {
+    if (livePrice == null) return;
+    const stopped = (trades as Trade[]).filter(
+      (t) =>
+        t.kind === "mult" &&
+        t.status === "open" &&
+        t.symbol === liveSymbol &&
+        t.stop_out_price != null &&
+        !settling.current.has(t.id) &&
+        (t.direction === "up"
+          ? livePrice <= Number(t.stop_out_price)
+          : livePrice >= Number(t.stop_out_price))
+    );
+    for (const t of stopped) {
+      settling.current.add(t.id);
+      void closeMult(t.id, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [livePrice, trades, liveSymbol]);
 
   const list = trades as Trade[];
   const settledList = (settled as Trade[]).filter((s) => !list.some((t) => t.id === s.id));
