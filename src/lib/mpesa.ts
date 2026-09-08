@@ -224,17 +224,29 @@ export async function stkStatus(
   });
   const json: any = await res.json().catch(() => ({}));
 
-  // Still awaiting the user -> Daraja returns a "being processed" error.
+  // While the prompt is still on the phone (before the PIN is entered) Daraja
+  // reports "the transaction is being processed" / "still under processing".
+  // That wording can arrive as an errorMessage OR as a ResultDesc (sometimes on
+  // a 200 with an unmapped ResultCode). Any of these means KEEP WAITING — never
+  // treat it as a failure.
   const errMsg = String(json?.errorMessage || "").toLowerCase();
-  if (errMsg.includes("process") || json?.errorCode === "500.001.1001") {
+  const resultDesc = String(json?.ResultDesc || "").toLowerCase();
+  if (
+    json?.errorCode === "500.001.1001" ||
+    errMsg.includes("process") ||
+    resultDesc.includes("process")
+  ) {
     return { state: "pending", resultCode: null, desc: "Enter your M-Pesa PIN on your phone…" };
   }
 
   const code = json?.ResultCode != null ? String(json.ResultCode) : null;
   const mapped = code ? RESULT_MAP[code] : null;
   if (mapped) return { state: mapped.state, resultCode: code, desc: mapped.desc };
-  if (code) return { state: "failed", resultCode: code, desc: String(json?.ResultDesc || "Payment failed.") };
-  return { state: "pending", resultCode: null, desc: "Waiting for confirmation…" };
+
+  // Unknown/absent result code (or a transient query error) — do NOT fail the
+  // deposit. Only the mapped codes above are terminal; everything else means we
+  // keep polling. A genuine success is also credited by the async callback.
+  return { state: "pending", resultCode: code, desc: "Waiting for confirmation…" };
 }
 
 export type B2cResult = {
