@@ -730,6 +730,7 @@ export function TradeTerminal() {
                 stakeValid={stakeValid}
                 markets={markets}
                 sim={sim}
+                demo={demo}
                 presetSide={botPreset?.side}
                 presetKey={botPreset?.key}
                 getSimEntry={() =>

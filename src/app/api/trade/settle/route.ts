@@ -39,11 +39,13 @@ export async function POST(req: Request) {
 
   try {
     const settled = await settleTrade(rows[0]);
-    const bal = (await sql`SELECT balance FROM abetrade_users WHERE id = ${session.id}`) as any[];
+    // Return the balance for the account the trade belongs to (demo trades settle
+    // into demo_balance) so the client updates the right wallet.
+    const bal = (await sql`SELECT balance, demo_balance FROM abetrade_users WHERE id = ${session.id}`) as any[];
     return NextResponse.json({
       ok: true,
       trade: settled,
-      balance: Number(bal[0]?.balance ?? 0),
+      balance: Number(rows[0].is_demo ? bal[0]?.demo_balance ?? 0 : bal[0]?.balance ?? 0),
     });
   } catch (e: any) {
     return NextResponse.json(

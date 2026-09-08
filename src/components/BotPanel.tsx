@@ -30,6 +30,7 @@ export function BotPanel({
   stakeValid,
   markets,
   sim,
+  demo,
   getSimEntry,
   onSimTrade,
   presetSide,
@@ -48,6 +49,7 @@ export function BotPanel({
   stakeValid: boolean;
   markets: Record<string, MarketTick>;
   sim?: boolean;
+  demo?: boolean;
   getSimEntry?: () => { price: number; epoch: number } | null;
   onSimTrade?: (trade: any) => void;
   presetSide?: string;
@@ -106,12 +108,14 @@ export function BotPanel({
         ? { kind: "rise_fall", symbol, direction: side, stake: stakeCents, duration }
         : { kind: "digit", symbol, direction: side, stake: stakeCents, subtype, barrier, ticks };
 
-    // In test/sim mode, flag the trade so the server rolls the outcome by the
-    // admin win % (same as manual test trades). When the trade is on the market
-    // currently on-screen, send the sim's price as entry so the chart line and
-    // the trade match.
+    // Demo vs test/sim. DEMO: flag the trade as demo so it debits/credits the
+    // virtual demo_balance (never real money) and the server rolls its own
+    // favourable rate. REAL test/sim: flag testMode so the server rolls by the
+    // admin win %. Either way, when the trade is on the market currently
+    // on-screen, send the sim's price as entry so the chart line matches.
     if (sim) {
-      body.testMode = true;
+      if (demo) body.demo = true;
+      else body.testMode = true;
       if (getSimEntry && body.symbol === symbol) {
         const e = getSimEntry();
         if (e) body.entry = e;
