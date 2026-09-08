@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
-import { BRAND_NAME, IS_ALT_BRAND } from "@/lib/brand";
+import { BRAND_NAME, IS_ALT_BRAND, BRAND_HEX_DARK } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#6A47F5",
+  themeColor: BRAND_HEX_DARK,
 };
 
 export default function RootLayout({

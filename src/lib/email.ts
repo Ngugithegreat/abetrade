@@ -8,7 +8,7 @@
 // If RESEND_API_KEY isn't set, sends are a safe no-op so signup/reset still work
 // before the DNS + key setup is finished.
 
-import { BRAND_NAME } from "./brand";
+import { BRAND_NAME, BRAND_HEX_DARK } from "./brand";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -64,7 +64,7 @@ export async function sendEmail(opts: {
 
 /* ------------------------- Branded HTML template ------------------------- */
 
-const BRAND = "#6A47F5";
+const BRAND = BRAND_HEX_DARK;
 
 function shell(inner: string): string {
   // Light template — renders consistently across every email client (dark-mode
@@ -84,7 +84,7 @@ function shell(inner: string): string {
       ${inner}
     </td></tr>
     <tr><td style="padding:16px 28px;border-top:1px solid #eef0f4;color:#8a90a0;font-size:12px;line-height:1.6;">
-      ${BRAND_NAME} · <a href="${siteUrl()}" style="color:#6A47F5;text-decoration:none;">${siteUrl().replace(/^https?:\/\//, "")}</a><br>
+      ${BRAND_NAME} · <a href="${siteUrl()}" style="color:${BRAND};text-decoration:none;">${siteUrl().replace(/^https?:\/\//, "")}</a><br>
       Trading volatility indices carries risk. Only trade what you can afford to lose.
     </td></tr>
   </table>
@@ -203,7 +203,7 @@ export function resetPasswordEmail(name: string, link: string): { subject: strin
      <p style="margin:0 0 16px;">Hi ${first}, we got a request to reset your ${BRAND_NAME} password. Click below to choose a new one — this link expires in 1 hour.</p>
      <p style="margin:0 0 22px;">${button("Reset password", link)}</p>
      <p style="margin:0 0 8px;color:#8a90a0;font-size:13px;">If the button doesn't work, paste this link into your browser:</p>
-     <p style="margin:0 0 16px;word-break:break-all;color:#6A47F5;font-size:13px;">${link}</p>
+     <p style="margin:0 0 16px;word-break:break-all;color:${BRAND};font-size:13px;">${link}</p>
      <p style="margin:0;color:#8a90a0;font-size:13px;">Didn't request this? You can safely ignore this email — your password won't change.</p>`
   );
   const text = `Reset your ${BRAND_NAME} password (expires in 1 hour): ${link}`;

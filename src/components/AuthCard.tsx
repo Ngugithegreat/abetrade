@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { COUNTRIES } from "@/lib/countries";
-import { BRAND_NAME } from "@/lib/brand";
+import { BRAND_NAME, BRAND_HEX_DARK, BRAND_HEX_LIGHT } from "@/lib/brand";
 
 type Mode = "signin" | "signup";
 
@@ -156,7 +156,7 @@ function BrandPanel({ mode, onToggle }: { mode: Mode; onToggle: () => void }) {
         className="absolute -inset-1/3 opacity-90"
         style={{
           background:
-            "conic-gradient(from 0deg at 50% 50%, #6A47F5, #5B8DEF, #9E86FF, #6A47F5)",
+            `conic-gradient(from 0deg at 50% 50%, ${BRAND_HEX_DARK}, #5B8DEF, ${BRAND_HEX_LIGHT}, ${BRAND_HEX_DARK})`,
           animation: "spin 16s linear infinite",
         }}
       />

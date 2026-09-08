@@ -22,6 +22,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { money, shortTime } from "@/lib/format";
 import { AdminSkeleton } from "./Skeleton";
+import { BRAND_HEX_LIGHT, BRAND_HEX_DARK, BRAND_RGB } from "@/lib/brand";
 
 type Player = {
   id: number;
@@ -176,7 +177,7 @@ export function AdminView() {
                 <XAxis dataKey="label" tick={{ fill: "#8b93a6", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: "#8b93a6", fontSize: 11 }} axisLine={false} tickLine={false} width={48} tickFormatter={(v) => `$${v}`} />
                 <Tooltip
-                  cursor={{ fill: "rgba(124,92,255,0.08)" }}
+                  cursor={{ fill: `rgba(${BRAND_RGB},0.08)` }}
                   contentStyle={{ background: "#12131b", border: "1px solid #262a38", borderRadius: 10, fontSize: 12 }}
                   formatter={(v: any) => [`$${Number(v).toLocaleString()}`, "Volume"]}
                 />
@@ -187,8 +188,8 @@ export function AdminView() {
                 </Bar>
                 <defs>
                   <linearGradient id="vbar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#9E86FF" />
-                    <stop offset="100%" stopColor="#6A47F5" />
+                    <stop offset="0%" stopColor={BRAND_HEX_LIGHT} />
+                    <stop offset="100%" stopColor={BRAND_HEX_DARK} />
                   </linearGradient>
                 </defs>
               </BarChart>

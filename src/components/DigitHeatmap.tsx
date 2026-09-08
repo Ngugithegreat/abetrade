@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { Point } from "@/lib/useDerivFeed";
 import { lastDigit } from "@/lib/markets";
+import { BRAND_HEX, BRAND_RGB } from "@/lib/brand";
 
 /**
  * Live last-digit frequency ring strip (0-9). Each digit is a circular gauge
@@ -45,7 +46,7 @@ export function DigitHeatmap({
         const isHot = d === hot;
         const isSel = selected === d;
         const frac = pct / maxPct;
-        const stroke = isCurrent ? "#7C5CFF" : isHot ? "#00E39A" : "#8b93a6";
+        const stroke = isCurrent ? BRAND_HEX : isHot ? "#00E39A" : "#8b93a6";
         return (
           <button
             key={d}
@@ -71,7 +72,7 @@ export function DigitHeatmap({
                   strokeDasharray={C}
                   strokeDashoffset={C * (1 - Math.max(0.04, frac))}
                   transform="rotate(-90 20 20)"
-                  style={isCurrent ? { filter: "drop-shadow(0 0 4px rgba(124,92,255,0.6))" } : undefined}
+                  style={isCurrent ? { filter: `drop-shadow(0 0 4px rgba(${BRAND_RGB},0.6))` } : undefined}
                 />
                 <text
                   x="20"
@@ -80,7 +81,7 @@ export function DigitHeatmap({
                   dominantBaseline="central"
                   fontSize="14"
                   fontWeight="700"
-                  fill={isCurrent ? "#7C5CFF" : "rgb(var(--fg))"}
+                  fill={isCurrent ? BRAND_HEX : "rgb(var(--fg))"}
                 >
                   {d}
                 </text>

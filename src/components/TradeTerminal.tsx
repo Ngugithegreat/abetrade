@@ -463,8 +463,7 @@ export function TradeTerminal() {
               </div>
               <button
                 onClick={() => setScannerOpen(true)}
-                className="btn px-3 py-2 text-xs font-semibold text-white"
-                style={{ background: "linear-gradient(180deg,#8b6dff,#6a47f5)" }}
+                className="btn btn-brand px-3 py-2 text-xs font-semibold"
               >
                 <Sparkles className="h-3.5 w-3.5" /> AI
               </button>

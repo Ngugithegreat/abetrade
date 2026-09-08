@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { BRAND_RGB } from "@/lib/brand";
 
 /**
  * A live, continuously-drifting line chart rendered on a canvas, used as a
@@ -94,14 +95,14 @@ export function HeroChartBackground() {
       ctx!.lineTo(-step, h);
       ctx!.closePath();
       const grad = ctx!.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, light ? "rgba(106,71,245,0.12)" : "rgba(124,92,255,0.20)");
-      grad.addColorStop(1, "rgba(124,92,255,0)");
+      grad.addColorStop(0, `rgba(${BRAND_RGB},${light ? 0.12 : 0.2})`);
+      grad.addColorStop(1, `rgba(${BRAND_RGB},0)`);
       ctx!.fillStyle = grad;
       ctx!.fill();
 
       // the line itself
       trace(step, offset, yAt);
-      ctx!.strokeStyle = light ? "rgba(106,71,245,0.26)" : "rgba(158,134,255,0.38)";
+      ctx!.strokeStyle = `rgba(${BRAND_RGB},${light ? 0.26 : 0.4})`;
       ctx!.lineWidth = 2;
       ctx!.lineJoin = "round";
       ctx!.stroke();

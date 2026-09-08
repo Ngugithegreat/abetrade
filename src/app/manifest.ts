@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { BRAND_NAME } from "@/lib/brand";
+import { BRAND_NAME, BRAND_HEX_DARK } from "@/lib/brand";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display: "standalone",
     orientation: "portrait",
     background_color: "#0a0b10",
-    theme_color: "#6A47F5",
+    theme_color: BRAND_HEX_DARK,
     categories: ["finance"],
     icons: [
       { src: "/apple-icon", sizes: "180x180", type: "image/png", purpose: "any" },

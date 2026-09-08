@@ -1,6 +1,8 @@
 // High-end, theme-blended backdrop for the whole app: a soft colour mesh, a
 // faint grid that fades out, glowing orbs, and a subtle upward "market line"
 // motif along the bottom. Static so it never distracts while trading.
+import { BRAND_RGB } from "@/lib/brand";
+
 export function AppBackground() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
@@ -9,7 +11,7 @@ export function AppBackground() {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "radial-gradient(60% 45% at 15% 0%, rgb(124 92 255 / 0.22), transparent 60%)," +
+            `radial-gradient(60% 45% at 15% 0%, rgba(${BRAND_RGB},0.22), transparent 60%),` +
             "radial-gradient(55% 45% at 100% 20%, rgb(91 141 239 / 0.18), transparent 60%)," +
             "radial-gradient(50% 50% at 50% 100%, rgb(236 72 153 / 0.10), transparent 65%)",
         }}
@@ -38,8 +40,8 @@ export function AppBackground() {
       >
         <defs>
           <linearGradient id="bgfill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="rgb(124 92 255 / 0.16)" />
-            <stop offset="100%" stopColor="rgb(124 92 255 / 0)" />
+            <stop offset="0%" stopColor={`rgba(${BRAND_RGB},0.16)`} />
+            <stop offset="100%" stopColor={`rgba(${BRAND_RGB},0)`} />
           </linearGradient>
         </defs>
         <path
@@ -48,7 +50,7 @@ export function AppBackground() {
         />
         <path
           d="M0 340 L120 320 L240 350 L360 300 L480 320 L600 250 L720 280 L840 200 L960 230 L1080 150 L1200 180"
-          stroke="rgb(124 92 255 / 0.35)"
+          stroke={`rgba(${BRAND_RGB},0.35)`}
           strokeWidth="2"
         />
       </svg>
