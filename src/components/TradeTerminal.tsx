@@ -23,7 +23,7 @@ import { useTestFeed } from "@/lib/useTestFeed";
 import { PriceChart } from "./PriceChart";
 import { DigitHeatmap } from "./DigitHeatmap";
 import { BotPanel } from "./BotPanel";
-import { AiScanner, Signal } from "./AiScanner";
+import { AiAutoTrader } from "./AiAutoTrader";
 import { Onboarding } from "./Onboarding";
 import { TradeReceipt } from "./TradeReceipt";
 import { celebrateWin, signalLoss, primeAudio } from "@/lib/feedback";
@@ -296,25 +296,23 @@ export function TradeTerminal() {
     }
   }
 
-  function applySignal(s: Signal) {
-    setSymbol(s.symbol);
-    if (s.contract === "digit") {
-      setContract("digit");
-      if (s.subtype) setSubtype(s.subtype);
-      if (typeof s.barrier === "number") setBarrier(s.barrier);
-    } else {
-      setContract("rise_fall");
-    }
-    setScannerOpen(false);
-    showToast(`Loaded ${marketBySymbol(s.symbol)?.short ?? s.symbol} · ${s.label}`, true);
-  }
-
   // AUTO bot supports time-settled contracts only (Rise/Fall + Digits).
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
   return (
     <div className={`mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden ${shake ? "animate-shake" : ""}`}>
-      <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
+      <AiAutoTrader
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        markets={markets}
+        demo={demo}
+        testMode={sim && !demo}
+        digitTicks={digitTicks}
+        duration={duration}
+        setBalance={setBalance}
+        refresh={refresh}
+        showToast={showToast}
+      />
       <Onboarding />
       <TradeReceipt trade={receipt} onClose={() => setReceipt(null)} />
       {/* KPI strip — hidden on phones so the trade controls fit on one screen */}
