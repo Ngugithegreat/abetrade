@@ -94,7 +94,12 @@ export function TradeTerminal() {
   const [botPreset, setBotPreset] = useState<{ side: string; key: number } | null>(null);
   const [resultFlash, setResultFlash] = useState<{ won: boolean; profit: number; label: string; sub: string; id: number } | null>(null);
   const [flashDigit, setFlashDigit] = useState<{ digit: number; won: boolean } | null>(null);
+  // Recently-settled trades kept briefly in the Open panel so you SEE them
+  // resolve (WON/LOST) before they drop into history — even 1-tick trades.
+  const [settledFlash, setSettledFlash] = useState<Trade[]>([]);
   const lastClosedRef = useRef<number | null>(null);
+  const seenClosedRef = useRef<Set<number>>(new Set());
+  const closedInitRef = useRef(false);
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
 
@@ -182,6 +187,29 @@ export function TradeTerminal() {
     const t = setTimeout(() => setFlashDigit(null), 2800);
     return () => clearTimeout(t);
   }, [flashDigit]);
+
+  // Hold each freshly-settled trade in the Open panel for ~1.6s with its outcome.
+  useEffect(() => {
+    if (!closedInitRef.current) {
+      closed.forEach((t) => seenClosedRef.current.add(t.id));
+      closedInitRef.current = true;
+      return;
+    }
+    const nowMs = Date.now();
+    const fresh = closed.filter((t) => !seenClosedRef.current.has(t.id));
+    fresh.forEach((t) => seenClosedRef.current.add(t.id));
+    // Only flash trades that just settled (avoid replaying old ones on reloads).
+    const toFlash = fresh.filter((t) => {
+      const s = t.settled_at ? new Date(t.settled_at).getTime() : nowMs;
+      return nowMs - s < 12000;
+    });
+    if (!toFlash.length) return;
+    setSettledFlash((prev) => [...toFlash, ...prev].slice(0, 8));
+    toFlash.forEach((t) => {
+      setTimeout(() => setSettledFlash((prev) => prev.filter((x) => x.id !== t.id)), 1800);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closed]);
 
   // Draw open Rise/Fall & Multiplier positions on the chart (entry + stop-out lines).
   const chartMarkers = openTrades
@@ -395,6 +423,7 @@ export function TradeTerminal() {
             {posTab === "open" ? (
               <OpenPositions
                 trades={openTrades}
+                settled={settledFlash}
                 onSettled={refresh}
                 liveSymbol={symbol}
                 livePrice={feed.last?.price ?? null}
@@ -1149,7 +1178,7 @@ function DigitBuyButton({
 
 /* ---------------- Positions ---------------- */
 
-function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, setBalance, onSelect }: any) {
+function OpenPositions({ trades, settled = [], onSettled, liveSymbol, livePrice, showToast, setBalance, onSelect }: any) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const settling = useRef<Set<number>>(new Set());
   const [closing, setClosing] = useState<number | null>(null);
@@ -1208,7 +1237,8 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
   }
 
   const list = trades as Trade[];
-  if (!list.length) {
+  const settledList = (settled as Trade[]).filter((s) => !list.some((t) => t.id === s.id));
+  if (!list.length && !settledList.length) {
     return (
       <div className="flex h-full min-h-[80px] items-center justify-center px-4 py-6 text-center text-xs text-muted">
         No open positions yet.
@@ -1222,8 +1252,41 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
     return `${t.direction === "matches" ? "MATCH" : "DIFF"} ${t.barrier}`;
   }
 
+  function labelOf(t: Trade) {
+    if (t.kind === "mult") return `${t.direction === "up" ? "UP" : "DOWN"} ×${t.multiplier}`;
+    if (t.kind === "digit") return digitLabel(t);
+    return t.direction === "rise" ? "RISE" : "FALL";
+  }
+
   return (
     <div className="flex flex-col gap-2 p-2">
+      {/* Just-settled trades resolving before they drop to history */}
+      {settledList.map((t) => {
+        const won = t.status === "won";
+        const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);
+        const profit = won ? Number(t.payout) - Number(t.stake) : -Number(t.stake);
+        return (
+          <div
+            key={`s-${t.id}`}
+            onClick={() => onSelect?.(t)}
+            className={`animate-fade-up flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 ${
+              won ? "border-up/40 bg-up/10" : "border-down/40 bg-down/10"
+            }`}
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold">{marketBySymbol(t.symbol)?.short ?? t.symbol}</span>
+                <span className={`rounded px-1 py-0.5 text-[9px] font-bold ${up ? "bg-up/15 text-up" : "bg-down/15 text-down"}`}>{labelOf(t)}</span>
+              </div>
+              <div className={`text-[11px] font-semibold ${won ? "text-up" : "text-down"}`}>
+                {won ? "WON" : "LOST"}
+                {t.kind === "digit" && t.exit_digit != null ? ` · digit ${t.exit_digit}` : ""}
+              </div>
+            </div>
+            <span className={`tabular text-sm font-bold ${won ? "text-up" : "text-down"}`}>{money(profit, { sign: true })}</span>
+          </div>
+        );
+      })}
       {list.map((t) => {
         const m = marketBySymbol(t.symbol);
         const isLive = t.symbol === liveSymbol && livePrice != null;
