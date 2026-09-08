@@ -716,6 +716,20 @@ function MoneyForm({
           value={amount}
           onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))}
         />
+        {kind === "deposit" && (
+          <div className="mt-2 grid grid-cols-5 gap-1.5">
+            {[5, 10, 20, 50, 100].map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setAmount(String(v))}
+                className={`btn py-1.5 text-[11px] ${Number(amount) === v ? "btn-brand" : "btn-ghost"}`}
+              >
+                ${v}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">Method</label>

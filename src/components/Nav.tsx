@@ -257,6 +257,18 @@ export function Nav() {
             {/* Sliding Deposit / Withdraw action (real account only) */}
             {!demo && <DepositWithdrawButton />}
 
+            {/* Profile avatar */}
+            <Link
+              href="/profile"
+              title="Profile"
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white transition ${
+                pathname === "/profile" ? "ring-2 ring-brand ring-offset-2 ring-offset-bg" : ""
+              }`}
+              style={{ background: "linear-gradient(135deg, rgb(var(--brand-light)), rgb(var(--brand-dark)))" }}
+            >
+              {(user?.name || "U").split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("") || "U"}
+            </Link>
+
             <ThemeToggle />
             <button
               onClick={logout}

@@ -70,31 +70,44 @@ export async function POST(req: Request) {
     );
   }
 
-  // Withdrawals are PROFIT-ONLY. Your deposits can never be withdrawn — only
-  // profit above your lifetime deposits (and never locked bonus funds). So if
-  // you deposit $5, trade and drop to $2, that $2 is remaining deposit and
-  // stays in to trade with; you can only cash out once your balance rises above
-  // what you've put in. This is a trading platform, not a banking service.
-  //   withdrawable = balance − lifetime deposits − locked bonus
-  const posRows = (await sql`
+  // Must-trade rule: you can't deposit and cash straight back out — you have to
+  // TRADE first. Require lifetime trading turnover (real staked) to be at least
+  // your lifetime deposits before any withdrawal. Winnings are withdrawable once
+  // you've traded; locked bonus can never be withdrawn.
+  const flow = (await sql`
     SELECT
       balance,
       COALESCE(bonus_locked, 0) AS bonus_locked,
       COALESCE((SELECT SUM(amount) FROM abetrade_transactions
                  WHERE user_id = ${session.id} AND type = 'deposit'
-                   AND status = 'completed' AND is_demo = false), 0) AS deposited
+                   AND status = 'completed' AND is_demo = false), 0) AS deposited,
+      COALESCE((SELECT SUM(-amount) FROM abetrade_transactions
+                 WHERE user_id = ${session.id} AND type = 'trade_stake'
+                   AND is_demo = false), 0) AS staked
     FROM abetrade_users WHERE id = ${session.id} LIMIT 1
-  `) as Array<{ balance: string | number; bonus_locked: string | number; deposited: string | number }>;
-  const posBal = Number(posRows[0]?.balance ?? 0);
-  const posLocked = Number(posRows[0]?.bonus_locked ?? 0);
-  const posDeposited = Number(posRows[0]?.deposited ?? 0);
-  const withdrawable = Math.max(0, posBal - posDeposited - posLocked);
+  `) as Array<{ balance: string | number; bonus_locked: string | number; deposited: string | number; staked: string | number }>;
+  const bal = Number(flow[0]?.balance ?? 0);
+  const locked = Number(flow[0]?.bonus_locked ?? 0);
+  const deposited = Number(flow[0]?.deposited ?? 0);
+  const staked = Number(flow[0]?.staked ?? 0);
+
+  if (staked < deposited) {
+    const needMore = (deposited - staked) / 100;
+    return NextResponse.json(
+      {
+        error: `Trade before withdrawing. ${BRAND_NAME} is not a banking service — place trades worth about $${needMore.toFixed(2)} more to unlock withdrawals.`,
+      },
+      { status: 403 }
+    );
+  }
+
+  // Withdrawable = balance minus any locked bonus (bonus is never withdrawable).
+  const withdrawable = Math.max(0, bal - locked);
   if (amount > withdrawable) {
-    const msg =
-      withdrawable <= 0
-        ? `No profit available to withdraw yet.`
-        : `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.`;
-    return NextResponse.json({ error: msg }, { status: 403 });
+    return NextResponse.json(
+      { error: `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.` },
+      { status: 403 }
+    );
   }
 
   // Instant-withdrawal daily limits (per account, resets at UTC midnight).
@@ -121,20 +134,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // Reserve funds atomically on the PROFIT-ONLY withdrawable amount
-  // (balance − lifetime deposits − locked bonus). This single guarded UPDATE is
-  // the real security boundary: you can never withdraw a deposit or locked
-  // bonus, never overdraw, and it's race-safe (two concurrent requests can't
-  // both pass), so nobody can fire parallel withdrawals to get around it.
+  // Reserve funds atomically on the withdrawable balance (balance minus locked
+  // bonus). Race-safe security boundary: can't overdraw, can't withdraw locked
+  // bonus, and two concurrent requests can't both pass.
   const debit = (await sql`
-    UPDATE abetrade_users u SET balance = balance - ${amount}
-    WHERE u.id = ${session.id}
-      AND u.balance
-          - GREATEST(COALESCE(u.bonus_locked, 0), 0)
-          - COALESCE((SELECT SUM(amount) FROM abetrade_transactions
-                       WHERE user_id = u.id AND type = 'deposit'
-                         AND status = 'completed' AND is_demo = false), 0)
-          >= ${amount}
+    UPDATE abetrade_users SET balance = balance - ${amount}
+    WHERE id = ${session.id}
+      AND balance - GREATEST(COALESCE(bonus_locked, 0), 0) >= ${amount}
     RETURNING balance
   `) as any[];
 
