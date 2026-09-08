@@ -9,6 +9,7 @@ import {
   LogOut,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Gift,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useApp } from "./app-context";
@@ -20,6 +21,7 @@ const links = [
   { href: "/trade", label: "Trade", icon: LineChart },
   { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/history", label: "History", icon: History },
+  { href: "/referrals", label: "Refer", icon: Gift },
 ];
 
 /**
