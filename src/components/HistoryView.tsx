@@ -5,6 +5,7 @@ import { useApp, Trade, Txn } from "./app-context";
 import { marketBySymbol } from "@/lib/markets";
 import { money, shortTime } from "@/lib/format";
 import { ArrowUp, ArrowDown, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { TradeReceipt } from "./TradeReceipt";
 
 type Tab = "trades" | "transactions";
 type TradeFilter = "all" | "rise_fall" | "digit" | "mult";
@@ -24,6 +25,7 @@ export function HistoryView() {
 
   const [tab, setTab] = useState<Tab>("trades");
   const [filter, setFilter] = useState<TradeFilter>("all");
+  const [receipt, setReceipt] = useState<Trade | null>(null);
 
   const wins = trades.filter((t) => t.status === "won").length;
   const losses = trades.filter((t) => t.status === "lost").length;
@@ -38,6 +40,7 @@ export function HistoryView() {
 
   return (
     <div className="space-y-5">
+      <TradeReceipt trade={receipt} onClose={() => setReceipt(null)} />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Trades" value={String(settled)} />
         <Stat label="Win rate" value={`${winRate}%`} accent="brand" />
@@ -85,7 +88,7 @@ export function HistoryView() {
           ) : (
             <div className="divide-y divide-border">
               {shown.map((t) => (
-                <TradeRow key={t.id} t={t} />
+                <TradeRow key={t.id} t={t} onSelect={setReceipt} />
               ))}
             </div>
           )}
@@ -120,7 +123,7 @@ function tradeProfit(t: Trade): number {
   return t.status === "won" ? Number(t.payout) - Number(t.stake) : -Number(t.stake);
 }
 
-function TradeRow({ t }: { t: Trade }) {
+function TradeRow({ t, onSelect }: { t: Trade; onSelect?: (t: Trade) => void }) {
   const m = marketBySymbol(t.symbol);
   const dp = m?.decimals ?? 2;
   const won = t.status === "won";
@@ -145,7 +148,10 @@ function TradeRow({ t }: { t: Trade }) {
       : `${Number(t.entry_price).toFixed(dp)} → ${t.exit_price != null ? Number(t.exit_price).toFixed(dp) : "—"} · ${money(Number(t.stake))} stake`;
 
   return (
-    <div className="flex items-center justify-between px-5 py-3">
+    <div
+      onClick={() => onSelect?.(t)}
+      className={`flex items-center justify-between px-5 py-3 ${onSelect ? "cursor-pointer transition hover:bg-surface2/50" : ""}`}
+    >
       <div className="flex items-center gap-3">
         <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${up ? "bg-up/15 text-up" : "bg-down/15 text-down"}`}>
           {up ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}

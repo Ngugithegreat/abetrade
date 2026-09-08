@@ -25,6 +25,8 @@ import { DigitHeatmap } from "./DigitHeatmap";
 import { BotPanel } from "./BotPanel";
 import { AiScanner, Signal } from "./AiScanner";
 import { Onboarding } from "./Onboarding";
+import { TradeReceipt } from "./TradeReceipt";
+import { celebrateWin, signalLoss } from "@/lib/feedback";
 import {
   MARKETS,
   DURATIONS,
@@ -87,6 +89,9 @@ export function TradeTerminal() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [alertPrice, setAlertPrice] = useState<number | null>(null);
   const alertPrevRef = useRef<number | null>(null);
+  const [receipt, setReceipt] = useState<Trade | null>(null);
+  const [shake, setShake] = useState(false);
+  const lastClosedRef = useRef<number | null>(null);
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
 
@@ -121,6 +126,28 @@ export function TradeTerminal() {
   const wins = closed.filter((t) => t.status === "won").length;
   const settled = closed.filter((t) => t.status !== "open").length;
   const winRate = settled ? Math.round((wins / settled) * 100) : 0;
+
+  // Premium feedback: when a new trade settles, celebrate a win (confetti +
+  // chime) or give a clean shake on a loss.
+  useEffect(() => {
+    const top = closed[0];
+    if (!top) return;
+    if (lastClosedRef.current === null) {
+      lastClosedRef.current = top.id; // don't fire on first load
+      return;
+    }
+    if (top.id !== lastClosedRef.current) {
+      lastClosedRef.current = top.id;
+      if (top.status === "won") {
+        celebrateWin();
+      } else if (top.status === "lost") {
+        signalLoss();
+        setShake(true);
+        setTimeout(() => setShake(false), 600);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closed]);
 
   // Draw open Rise/Fall & Multiplier positions on the chart (entry + stop-out lines).
   const chartMarkers = openTrades
@@ -284,9 +311,10 @@ export function TradeTerminal() {
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
   return (
-    <div className="mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+    <div className={`mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden ${shake ? "animate-shake" : ""}`}>
       <AiScanner open={scannerOpen} onClose={() => setScannerOpen(false)} markets={markets} onApply={applySignal} />
       <Onboarding />
+      <TradeReceipt trade={receipt} onClose={() => setReceipt(null)} />
       {/* KPI strip — hidden on phones so the trade controls fit on one screen */}
       <div className="mb-3 hidden shrink-0 grid-cols-2 gap-2 sm:grid sm:grid-cols-4">
         <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
@@ -320,9 +348,10 @@ export function TradeTerminal() {
                 livePrice={feed.last?.price ?? null}
                 showToast={showToast}
                 setBalance={setBalance}
+                onSelect={setReceipt}
               />
             ) : (
-              <ClosedPositions trades={closed} />
+              <ClosedPositions trades={closed} onSelect={setReceipt} />
             )}
           </div>
         </div>
@@ -482,6 +511,11 @@ export function TradeTerminal() {
                 +
               </button>
             </div>
+            {stakeNum > 0 && (
+              <div className="mt-1 text-right text-[11px] text-muted">
+                ≈ KES {Math.round(stakeNum * (config?.usdKesRate ?? 130)).toLocaleString("en-US")}
+              </div>
+            )}
             <div className="mt-2 grid grid-cols-6 gap-1.5">
               {QUICK_STAKES.map((q) => (
                 <button
@@ -983,7 +1017,7 @@ function DigitBuyButton({
 
 /* ---------------- Positions ---------------- */
 
-function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, setBalance }: any) {
+function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, setBalance, onSelect }: any) {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const settling = useRef<Set<number>>(new Set());
   const [closing, setClosing] = useState<number | null>(null);
@@ -1074,11 +1108,11 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
             : null;
           const win = (pnl ?? 0) >= 0;
           return (
-            <Row key={t.id} m={m?.short ?? t.symbol} tag={`${t.direction === "up" ? "UP" : "DOWN"} x${t.multiplier}`} tagColor={t.direction === "up" ? "up" : "down"} sub={`${money(Number(t.stake))} · ${Number(t.entry_price).toFixed(2)}`}>
+            <Row key={t.id} onClick={() => onSelect?.(t)} m={m?.short ?? t.symbol} tag={`${t.direction === "up" ? "UP" : "DOWN"} x${t.multiplier}`} tagColor={t.direction === "up" ? "up" : "down"} sub={`${money(Number(t.stake))} · ${Number(t.entry_price).toFixed(2)}`}>
               <span className={`tabular text-sm font-bold ${pnl == null ? "text-muted" : win ? "text-up" : "text-down"}`}>
                 {pnl == null ? "—" : money(pnl, { sign: true })}
               </span>
-              <button onClick={() => closeMult(t.id)} disabled={closing === t.id} className="btn btn-ghost px-2 py-1 text-[11px]">
+              <button onClick={(e) => { e.stopPropagation(); closeMult(t.id); }} disabled={closing === t.id} className="btn btn-ghost px-2 py-1 text-[11px]">
                 {closing === t.id ? "…" : "Close"}
               </button>
             </Row>
@@ -1091,7 +1125,7 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
         if (t.kind === "digit") {
           const up = ["even", "over", "matches"].includes(t.direction);
           return (
-            <Row key={t.id} m={m?.short ?? t.symbol} tag={digitLabel(t)} tagColor={up ? "up" : "down"} sub={`${money(Number(t.stake))} → ${money(Number(t.payout))}`}>
+            <Row key={t.id} onClick={() => onSelect?.(t)} m={m?.short ?? t.symbol} tag={digitLabel(t)} tagColor={up ? "up" : "down"} sub={`${money(Number(t.stake))} → ${money(Number(t.payout))}`}>
               {isSettling ? (
                 <span className="text-xs font-medium text-gold">settling…</span>
               ) : (
@@ -1107,7 +1141,7 @@ function OpenPositions({ trades, onSettled, liveSymbol, livePrice, showToast, se
             : livePrice! < t.entry_price
           : null;
         return (
-          <Row key={t.id} m={m?.short ?? t.symbol} tag={t.direction === "rise" ? "RISE" : "FALL"} tagColor={t.direction === "rise" ? "up" : "down"} sub={`${money(Number(t.stake))} → ${money(Number(t.payout))}`}>
+          <Row key={t.id} onClick={() => onSelect?.(t)} m={m?.short ?? t.symbol} tag={t.direction === "rise" ? "RISE" : "FALL"} tagColor={t.direction === "rise" ? "up" : "down"} sub={`${money(Number(t.stake))} → ${money(Number(t.payout))}`}>
             <div className="text-right">
               {isSettling ? (
                 <span className="text-xs font-medium text-gold">settling…</span>
@@ -1133,15 +1167,22 @@ function Row({
   tagColor,
   sub,
   children,
+  onClick,
 }: {
   m: string;
   tag: string;
   tagColor: "up" | "down";
   sub: string;
   children: React.ReactNode;
+  onClick?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border bg-surface2/40 px-3.5 py-2.5">
+    <div
+      onClick={onClick}
+      className={`flex items-center justify-between rounded-xl border border-border bg-surface2/40 px-3.5 py-2.5 ${
+        onClick ? "cursor-pointer transition hover:border-brand/40 hover:bg-surface2/70" : ""
+      }`}
+    >
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-semibold">{m}</span>
@@ -1156,7 +1197,7 @@ function Row({
   );
 }
 
-function ClosedPositions({ trades }: { trades: Trade[] }) {
+function ClosedPositions({ trades, onSelect }: { trades: Trade[]; onSelect?: (t: Trade) => void }) {
   if (!trades.length) {
     return (
       <div className="flex h-full min-h-[80px] items-center justify-center px-4 py-6 text-center text-xs text-muted">
@@ -1183,7 +1224,7 @@ function ClosedPositions({ trades }: { trades: Trade[] }) {
         const won = t.status === "won";
         const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);
         return (
-          <Row key={t.id} m={marketBySymbol(t.symbol)?.short ?? t.symbol} tag={label(t)} tagColor={up ? "up" : "down"} sub={`${money(Number(t.stake))} stake`}>
+          <Row key={t.id} onClick={() => onSelect?.(t)} m={marketBySymbol(t.symbol)?.short ?? t.symbol} tag={label(t)} tagColor={up ? "up" : "down"} sub={`${money(Number(t.stake))} stake`}>
             <span className={`tabular text-sm font-bold ${won ? "text-up" : "text-down"}`}>
               {money(profit(t), { sign: true })}
             </span>

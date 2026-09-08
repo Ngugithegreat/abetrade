@@ -12,6 +12,7 @@ import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { HeroVisual } from "@/components/HeroVisual";
 import { HeroChartBackground } from "@/components/HeroChartBackground";
+import { WinsTicker } from "@/components/WinsTicker";
 import { RotatingWord } from "@/components/RotatingWord";
 import { MARKETS, PAYOUT_MULTIPLIER } from "@/lib/markets";
 
@@ -84,6 +85,9 @@ export default function Landing() {
           <HeroVisual />
         </div>
       </section>
+
+      {/* Recent wins ticker — social proof (shows only when there's real data) */}
+      <WinsTicker />
 
       {/* Markets strip */}
       <section className="border-y border-border bg-surface/40">
