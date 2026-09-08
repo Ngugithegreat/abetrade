@@ -14,7 +14,7 @@ export async function GET() {
   await ensureSchema();
   const sql = db();
 
-  const [pending, users, kpi, daily, topUsers, kycPending, testAccounts, withdrawalsRaw] = await Promise.all([
+  const [pending, users, kpi, daily, topUsers, kycPending, testAccounts, withdrawalsRaw, attentionRaw] = await Promise.all([
     sql`
       SELECT t.*, u.email, u.name AS user_name
       FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
@@ -83,6 +83,14 @@ export async function GET() {
       ORDER BY t.created_at DESC
       LIMIT 200
     ` as Promise<any[]>,
+    sql`
+      SELECT t.id, t.user_id, t.type, t.amount, t.status, t.method, t.reference, t.receipt, t.note, t.provider_ref, t.created_at,
+             u.name, u.email
+      FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
+      WHERE t.type IN ('deposit','withdrawal') AND t.status IN ('pending','rejected') AND t.is_demo = false
+      ORDER BY t.created_at DESC
+      LIMIT 100
+    ` as Promise<any[]>,
   ]);
 
   const [houseEdge, referralPct, maxStakeCents, maxPayoutCents, globalTest, globalTestPct, wdDailyCount, wdDailyMaxCents] =
@@ -138,6 +146,20 @@ export async function GET() {
       kyc_name: u.kyc_name,
       kyc_id_number: u.kyc_id_number,
       kyc_phone: u.kyc_phone,
+    })),
+    attention: attentionRaw.map((t) => ({
+      id: t.id,
+      name: t.name,
+      account_no: accountNo(t.user_id),
+      type: t.type,
+      amount: Math.abs(Number(t.amount)),
+      status: t.status,
+      method: t.method,
+      reference: t.reference,
+      receipt: t.receipt,
+      note: t.note,
+      provider_ref: t.provider_ref,
+      created_at: t.created_at,
     })),
     withdrawals: withdrawalsRaw.map((w) => ({
       id: w.id,

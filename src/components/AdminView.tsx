@@ -18,6 +18,8 @@ import {
   Gift,
   Megaphone,
   Search,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { money, shortTime } from "@/lib/format";
@@ -107,6 +109,9 @@ export function AdminView() {
 
   return (
     <div className="space-y-5">
+      {/* Needs attention — anything debited but not settled (never in the dark) */}
+      <AttentionCard items={data.attention || []} />
+
       {/* Global test mode */}
       <GlobalTestCard
         on={!!data.globalTest}
@@ -457,6 +462,78 @@ function WdStatus({ status }: { status: string }) {
   };
   const s = map[status] || { label: status, cls: "bg-surface2 text-muted" };
   return <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${s.cls}`}>{s.label}</span>;
+}
+
+type Attention = {
+  id: number;
+  name: string;
+  account_no: string;
+  type: "deposit" | "withdrawal" | string;
+  amount: number;
+  status: string;
+  method: string | null;
+  reference: string | null;
+  receipt: string | null;
+  note: string | null;
+  provider_ref: string | null;
+  created_at: string;
+};
+
+function AttentionCard({ items }: { items: Attention[] }) {
+  if (!items.length) {
+    return (
+      <div className="card flex items-center gap-3 border-up/30 p-4">
+        <CheckCircle2 className="h-5 w-5 text-up" />
+        <div>
+          <div className="text-sm font-bold">All clear</div>
+          <div className="text-[11px] text-muted">No deposits or withdrawals are stuck — nothing debited but unsettled.</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="card overflow-hidden border-gold/40">
+      <div className="flex items-center gap-2 border-b border-border bg-gold/10 px-5 py-3">
+        <AlertTriangle className="h-4 w-4 text-gold" />
+        <span className="font-bold">Needs attention ({items.length})</span>
+        <span className="ml-auto text-[11px] text-muted">Stuck / failed deposits & withdrawals</span>
+      </div>
+      <div className="max-h-[440px] divide-y divide-border overflow-auto">
+        {items.map((t) => {
+          const isDep = t.type === "deposit";
+          const hint = isDep
+            ? t.status === "pending"
+              ? "Paid but not credited — check M-Pesa"
+              : "Deposit rejected — not credited"
+            : t.status === "pending"
+            ? "Reserved — payout not confirmed"
+            : "Withdrawal refunded to balance";
+          return (
+            <div key={`${t.type}-${t.id}`} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${isDep ? "bg-up/15 text-up" : "bg-gold/15 text-gold"}`}>
+                    {isDep ? "Deposit" : "Withdrawal"}
+                  </span>
+                  {t.name} <span className="text-[11px] text-muted">({t.account_no})</span>
+                </div>
+                <div className="tabular text-[11px] text-muted">
+                  {hint}
+                  {t.reference ? ` · ${t.reference}` : ""}
+                  {t.receipt ? ` · ${t.receipt}` : ""}
+                  {t.provider_ref ? ` · ref ${t.provider_ref}` : ""} · {shortTime(t.created_at)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="tabular text-sm font-bold">{money(t.amount)}</div>
+                <WdStatus status={t.status} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function WithdrawalsCard({ items }: { items: Withdrawal[] }) {
