@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { callbackToken } from "@/lib/mpesa";
+import { sendPushToUser } from "@/lib/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,6 +65,11 @@ export async function POST(req: Request) {
       }
       WHERE id = ${tx.id} AND status = 'pending'
     `;
+    void sendPushToUser(tx.user_id, {
+      title: "Withdrawal paid 💸",
+      body: `$${(Math.abs(Number(tx.amount)) / 100).toFixed(2)} has been sent to your M-Pesa.`,
+      url: "/wallet",
+    });
   } else {
     // Refund the reservation (amount is negative -> subtract to add back).
     const claimed = (await sql`

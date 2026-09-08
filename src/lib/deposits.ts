@@ -2,6 +2,7 @@ import { db } from "./db";
 import { sendEmail, depositReceiptEmail } from "./email";
 import { payReferralOnDeposit } from "./referral";
 import { stkStatus } from "./mpesa";
+import { sendPushToUser } from "./push";
 
 // Shared, idempotent crediting for automated deposits. Every provider webhook
 // funnels through here: it finds the PENDING deposit by its provider reference,
@@ -57,6 +58,13 @@ export async function creditPendingDeposit(
 
   // Pay the referrer their share if this is the user's first deposit (idempotent).
   await payReferralOnDeposit(tx.user_id, amount).catch(() => {});
+
+  // Push: deposit received (no-op unless push is configured).
+  void sendPushToUser(tx.user_id, {
+    title: "Deposit received ✅",
+    body: `$${(amount / 100).toFixed(2)} has been added to your balance.`,
+    url: "/wallet",
+  });
 
   // Email receipt — fire-and-forget so crediting never depends on email.
   void (async () => {

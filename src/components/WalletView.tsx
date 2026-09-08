@@ -24,6 +24,7 @@ import { useApp, Txn } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 import { railsForCountry } from "@/lib/countries";
 import { ListSkeleton } from "./Skeleton";
+import { NotificationToggle } from "./NotificationToggle";
 
 type MethodDef = { id: string; label: string; hint: string; icon: any };
 
@@ -185,6 +186,7 @@ export function WalletView() {
         </div>
       </div>
 
+      {!demo && <NotificationToggle />}
     </div>
   );
 }

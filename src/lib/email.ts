@@ -180,6 +180,20 @@ export function referralEarnedEmail(
   return { subject: `You earned ${amt} in referral rewards`, html, text: `${friend} made their first deposit — you earned ${amt} on SinTrades.` };
 }
 
+export function verifyEmailOtp(name: string, code: string): { subject: string; html: string; text: string } {
+  const first = (name || "there").split(" ")[0];
+  const html = shell(
+    `<h1 style="margin:0 0 12px;color:#0f1116;font-size:22px;">Confirm your email</h1>
+     <p style="margin:0 0 16px;">Hi ${first}, enter this code in SinTrades to verify your email address:</p>
+     <div style="margin:0 0 18px;text-align:center;">
+       <span style="display:inline-block;font-size:34px;font-weight:800;letter-spacing:10px;color:#0f1116;background:#f4f5f7;border:1px solid #e6e8ee;border-radius:12px;padding:14px 20px;">${code}</span>
+     </div>
+     <p style="margin:0;color:#8a90a0;font-size:13px;">This code expires in 10 minutes. If you didn't create a SinTrades account, you can ignore this email.</p>`
+  );
+  const text = `Your SinTrades verification code is ${code}. It expires in 10 minutes.`;
+  return { subject: `Your SinTrades code: ${code}`, html, text };
+}
+
 export function resetPasswordEmail(name: string, link: string): { subject: string; html: string; text: string } {
   const first = (name || "there").split(" ")[0];
   const html = shell(

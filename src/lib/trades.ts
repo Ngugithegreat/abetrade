@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { getMaxPayoutCents } from "./settings";
+import { sendPushToUser } from "./push";
 import { getLatestTick, getTickAtOrAfter, Tick } from "./deriv-server";
 import {
   multiplierPnl,
@@ -122,6 +123,13 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
         "Won " + trade.symbol + " " + trade.direction
       }, ${trade.is_demo})
     `;
+    if (!trade.is_demo) {
+      void sendPushToUser(trade.user_id, {
+        title: "Trade won 🎉",
+        body: `You won $${(payout / 100).toFixed(2)} on ${trade.symbol}.`,
+        url: "/trade",
+      });
+    }
   }
 
   return updated[0];

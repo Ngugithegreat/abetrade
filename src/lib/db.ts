@@ -100,6 +100,24 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false`;
   await sql`ALTER TABLE abetrade_transactions ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false`;
 
+  // Email verification (OTP). Non-blocking: accounts work unverified, this just
+  // confirms the address is real and drives the "verified" badge.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS email_otp_hash TEXT`;
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS email_otp_expires TIMESTAMPTZ`;
+
+  // Web Push subscriptions (one row per browser/device endpoint).
+  await sql`
+    CREATE TABLE IF NOT EXISTS abetrade_push_subs (
+      endpoint   TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES abetrade_users(id) ON DELETE CASCADE,
+      p256dh     TEXT NOT NULL,
+      auth       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS idx_push_user ON abetrade_push_subs(user_id)`;
+
   // Provider correlation columns for automated M-Pesa (added idempotently so
   // existing databases upgrade cleanly).
   await sql`ALTER TABLE abetrade_transactions ADD COLUMN IF NOT EXISTS provider_ref TEXT`;

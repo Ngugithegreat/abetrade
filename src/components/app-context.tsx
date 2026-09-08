@@ -63,6 +63,7 @@ export type AppUser = {
   bonus_locked?: number;
   isTest?: boolean;
   testWinPct?: number;
+  email_verified?: boolean;
 };
 
 export type AppConfig = {
