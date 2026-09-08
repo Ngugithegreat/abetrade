@@ -6,6 +6,7 @@ import { money, cents } from "@/lib/format";
 import { MAX_STAKE, DigitSubtype, marketBySymbol } from "@/lib/markets";
 import { computeSignals } from "./AiScanner";
 import type { MarketTick } from "@/lib/useDerivFeed";
+import { primeAudio } from "@/lib/feedback";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -159,6 +160,7 @@ export function BotPanel({
 
   async function run() {
     if (!stakeValid) return showToast("Set a valid stake first.", false);
+    primeAudio();
     stopRef.current = false;
     setRunning(true);
     setLog([]);

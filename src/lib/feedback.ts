@@ -27,6 +27,15 @@ function ctx(): AudioContext | null {
   }
 }
 
+// Call this from a user gesture (e.g. placing a trade) so the audio context is
+// created + resumed while a gesture is active. Browsers block audio started
+// later (at settle time) unless the context was unlocked during a gesture —
+// this is why trades could settle silently.
+export function primeAudio(): void {
+  if (!soundOn()) return;
+  ctx();
+}
+
 function tone(freq: number, start: number, dur: number, gain = 0.14, type: OscillatorType = "sine") {
   const ac = ctx();
   if (!ac) return;

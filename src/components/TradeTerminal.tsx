@@ -26,7 +26,7 @@ import { BotPanel } from "./BotPanel";
 import { AiScanner, Signal } from "./AiScanner";
 import { Onboarding } from "./Onboarding";
 import { TradeReceipt } from "./TradeReceipt";
-import { celebrateWin, signalLoss } from "@/lib/feedback";
+import { celebrateWin, signalLoss, primeAudio } from "@/lib/feedback";
 import {
   MARKETS,
   DURATIONS,
@@ -241,6 +241,8 @@ export function TradeTerminal() {
 
   async function place(direction: string, extra?: Record<string, unknown>) {
     if (!stakeValid || placing) return;
+    // Unlock audio during this tap so the win/loss sound can play at settle.
+    primeAudio();
     setPlacing(direction);
     try {
       let body: Record<string, unknown>;
