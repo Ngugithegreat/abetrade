@@ -20,6 +20,7 @@ import { useApp, AccountMode } from "./app-context";
 import { money } from "@/lib/format";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
+import { BRAND_NAME } from "@/lib/brand";
 
 const links = [
   { href: "/trade", label: "Trade", icon: LineChart },
@@ -214,7 +215,7 @@ export function Nav() {
               <Logo className="h-7 w-7" />
               {/* Wordmark hides on the tightest phones so the action row fits */}
               <span className="hidden text-lg font-bold tracking-tight min-[380px]:inline">
-                SinTrades
+                {BRAND_NAME}
               </span>
             </Link>
             {/* Desktop primary nav */}

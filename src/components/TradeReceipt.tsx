@@ -5,6 +5,7 @@ import { X, CheckCircle2, XCircle, Clock, ArrowUpRight, ArrowDownRight } from "l
 import type { Trade } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 import { marketBySymbol, decimalsFor } from "@/lib/markets";
+import { BRAND_NAME } from "@/lib/brand";
 
 // A clean, shareable-looking trade receipt — the detail card that makes the
 // platform feel like a real broker. Opens for any position (open or settled).
@@ -101,7 +102,7 @@ export function TradeReceipt({ trade, onClose }: { trade: Trade | null; onClose:
         </div>
 
         <div className="px-5 py-3 text-center text-[11px] text-muted">
-          SinTrades · contract #{t.id}
+          {BRAND_NAME} · contract #{t.id}
         </div>
       </div>
     </div>

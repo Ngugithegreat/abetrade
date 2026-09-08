@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { cents } from "@/lib/format";
+import { BRAND_NAME } from "@/lib/brand";
 import {
   isMpesaConfigured,
   isProduction,
@@ -84,7 +85,7 @@ export async function POST(req: Request) {
         phone,
         amountKes,
         accountRef: `AT${session.id}`,
-        description: "SinTrades deposit",
+        description: `${BRAND_NAME} deposit`,
         callbackUrl,
       });
       const rows = (await sql`

@@ -12,6 +12,8 @@
 //  • Verify the exact requestToPay field names against your working AbePay
 //    `collecto.ts` if a request is rejected — cissytech's docs differ from live.
 
+import { BRAND_NAME } from "./brand";
+
 const DEFAULT_BASE = "https://collecto.cissytech.com/api";
 
 function base(): string {
@@ -88,7 +90,7 @@ export async function requestToPay(opts: {
     phone: opts.phone,
     reference: opts.reference,
     gateway: opts.gateway,
-    reason: "SinTrades deposit",
+    reason: `${BRAND_NAME} deposit`,
   });
 }
 

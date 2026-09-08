@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { BRAND_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
@@ -10,22 +11,23 @@ const inter = Inter({
   display: "swap",
 });
 
+const DESC =
+  "Trade Volatility Indices live with instant deposits and withdrawals. Simple, fast, and built for everyone.";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.sintrades.com"),
-  title: "SinTrades — Trade Volatility Indices",
-  description:
-    "Trade Volatility Indices live with instant deposits and withdrawals. Simple, fast, and built for everyone.",
+  metadataBase: new URL(process.env.PUBLIC_BASE_URL || "https://www.sintrades.com"),
+  title: `${BRAND_NAME} — Trade Volatility Indices`,
+  description: DESC,
   openGraph: {
-    title: "SinTrades — Trade Volatility Indices",
-    description:
-      "Trade Volatility Indices live with instant deposits and withdrawals. Simple, fast, and built for everyone.",
-    url: "https://www.sintrades.com",
-    siteName: "SinTrades",
+    title: `${BRAND_NAME} — Trade Volatility Indices`,
+    description: DESC,
+    url: process.env.PUBLIC_BASE_URL || "https://www.sintrades.com",
+    siteName: BRAND_NAME,
     type: "website",
   },
   appleWebApp: {
     capable: true,
-    title: "SinTrades",
+    title: BRAND_NAME,
     statusBarStyle: "black-translucent",
   },
 };

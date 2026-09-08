@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { LineChart, Hash, Wallet, Rocket } from "lucide-react";
 import { Logo } from "./Logo";
+import { BRAND_NAME } from "@/lib/brand";
 
 const KEY = "st_onboarded_v1";
 
 const STEPS = [
   {
     icon: LineChart,
-    title: "Welcome to SinTrades",
+    title: `Welcome to ${BRAND_NAME}`,
     body: "Trade live Volatility Indices in seconds. Predict where the price goes and win when you're right — all on a real-time market feed.",
   },
   {
@@ -61,7 +62,7 @@ export function Onboarding() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Logo className="h-7 w-7" />
-            <span className="text-lg font-bold tracking-tight">SinTrades</span>
+            <span className="text-lg font-bold tracking-tight">{BRAND_NAME}</span>
           </div>
           <button onClick={close} className="text-xs text-muted hover:text-fg">
             Skip

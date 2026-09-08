@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { HeroVisual } from "@/components/HeroVisual";
 import { HeroChartBackground } from "@/components/HeroChartBackground";
 import { WinsTicker } from "@/components/WinsTicker";
+import { BRAND_NAME } from "@/lib/brand";
 import { RotatingWord } from "@/components/RotatingWord";
 import { MARKETS, PAYOUT_MULTIPLIER } from "@/lib/markets";
 
@@ -34,7 +35,7 @@ export default function Landing() {
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
         <div className="flex items-center gap-2">
           <Logo className="h-8 w-8" />
-          <span className="text-xl font-bold tracking-tight">SinTrades</span>
+          <span className="text-xl font-bold tracking-tight">{BRAND_NAME}</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -175,7 +176,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-4 py-8 text-center text-xs text-muted">
           <div className="mb-2 flex items-center justify-center gap-2">
             <Logo className="h-5 w-5" />
-            <span className="font-semibold text-white">SinTrades</span>
+            <span className="font-semibold text-white">{BRAND_NAME}</span>
           </div>
           <div className="mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             <Link href="/how-it-works" className="hover:text-brand">How it works</Link>
@@ -188,7 +189,7 @@ export default function Landing() {
             everyone. Only trade with money you can afford to lose. Prices are
             provided by the Deriv synthetic-index feed.
           </p>
-          <p className="mt-3">© {new Date().getFullYear()} SinTrades. All rights reserved.</p>
+          <p className="mt-3">© {new Date().getFullYear()} {BRAND_NAME}. All rights reserved.</p>
         </div>
       </footer>
     </div>

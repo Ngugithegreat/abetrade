@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { InfoPage, Section } from "@/components/InfoPage";
+import { BRAND_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "How it works — SinTrades",
-  description: "How trading Volatility Indices on SinTrades works: markets, contracts, deposits and withdrawals.",
+  title: `How it works — ${BRAND_NAME}`,
+  description: `How trading Volatility Indices on ${BRAND_NAME} works: markets, contracts, deposits and withdrawals.`,
 };
 
 export default function HowItWorks() {
@@ -46,7 +47,7 @@ export default function HowItWorks() {
 
       <Section heading="5. Withdraw your winnings">
         <p>
-          Withdrawals are <b>instant</b> to M-Pesa. Because SinTrades is a trading platform (not a
+          Withdrawals are <b>instant</b> to M-Pesa. Because {BRAND_NAME} is a trading platform (not a
           wallet), you need to trade before cashing out — your total trading must at least match
           what you've deposited. Winnings can then be withdrawn freely, subject to daily limits.
         </p>
@@ -55,7 +56,7 @@ export default function HowItWorks() {
       <Section heading="A note on risk">
         <p>
           Trading involves risk and you can lose your stake. Never trade money you can't afford to
-          lose, and set yourself limits. SinTrades is for entertainment and speculative trading.
+          lose, and set yourself limits. {BRAND_NAME} is for entertainment and speculative trading.
         </p>
       </Section>
     </InfoPage>

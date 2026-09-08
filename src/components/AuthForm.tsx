@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "./Logo";
+import { BRAND_NAME } from "@/lib/brand";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const router = useRouter();
@@ -46,7 +47,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       <div className="w-full max-w-md">
         <Link href="/" className="mb-8 flex items-center justify-center gap-2">
           <Logo className="h-9 w-9" />
-          <span className="text-2xl font-bold tracking-tight">SinTrades</span>
+          <span className="text-2xl font-bold tracking-tight">{BRAND_NAME}</span>
         </Link>
 
         <div className="card p-6 sm:p-8">
@@ -116,7 +117,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </form>
 
           <p className="mt-5 text-center text-sm text-muted">
-            {isRegister ? "Already have an account? " : "New to SinTrades? "}
+            {isRegister ? "Already have an account? " : `New to ${BRAND_NAME}? `}
             <Link
               href={isRegister ? "/login" : "/register"}
               className="font-medium text-brand hover:underline"

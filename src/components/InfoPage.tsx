@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Logo } from "./Logo";
+import { BRAND_NAME } from "@/lib/brand";
 
 // Shared shell for public content pages (How it works, Payout rules, etc.).
 export function InfoPage({
@@ -18,7 +19,7 @@ export function InfoPage({
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
           <Link href="/" className="flex items-center gap-2">
             <Logo className="h-7 w-7" />
-            <span className="text-lg font-bold tracking-tight">SinTrades</span>
+            <span className="text-lg font-bold tracking-tight">{BRAND_NAME}</span>
           </Link>
           <Link href="/" className="btn btn-ghost px-3 py-1.5 text-sm">
             <ArrowLeft className="h-4 w-4" /> Home

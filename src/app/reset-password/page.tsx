@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState<string | null | undefined>(undefined);
@@ -51,7 +52,7 @@ export default function ResetPasswordPage() {
       <div className="card w-full max-w-sm p-7">
         <Link href="/" className="mb-5 flex items-center gap-2">
           <Logo className="h-8 w-8" />
-          <span className="text-xl font-bold tracking-tight">SinTrades</span>
+          <span className="text-xl font-bold tracking-tight">{BRAND_NAME}</span>
         </Link>
 
         {done ? (

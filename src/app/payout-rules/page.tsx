@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { InfoPage, Section } from "@/components/InfoPage";
 import { PAYOUT_MULTIPLIER } from "@/lib/markets";
+import { BRAND_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "Payout rules — SinTrades",
-  description: "How payouts, stakes and settlement work on SinTrades.",
+  title: `Payout rules — ${BRAND_NAME}`,
+  description: `How payouts, stakes and settlement work on ${BRAND_NAME}.`,
 };
 
 export default function PayoutRules() {

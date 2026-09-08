@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Gift, Copy, Check, Users, Share2, Wallet, UserPlus } from "lucide-react";
 import { useApp } from "./app-context";
 import { money } from "@/lib/format";
+import { BRAND_NAME } from "@/lib/brand";
 
 export function ReferralView() {
   const { data, loading } = useApp();
@@ -32,8 +33,8 @@ export function ReferralView() {
     if (typeof navigator !== "undefined" && (navigator as any).share) {
       try {
         await (navigator as any).share({
-          title: "Join me on SinTrades",
-          text: "Trade volatility indices on SinTrades — sign up with my link:",
+          title: `Join me on ${BRAND_NAME}`,
+          text: `Trade volatility indices on ${BRAND_NAME} — sign up with my link:`,
           url: link,
         });
         return;

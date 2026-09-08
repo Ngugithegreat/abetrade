@@ -1,4 +1,5 @@
 import { createHmac } from "crypto";
+import { BRAND_NAME } from "./brand";
 
 // Crypto deposits via NOWPayments (hosted invoice + signed IPN webhook).
 // Priced directly in USD, so no FX conversion — the user pays USDT/BTC/etc.
@@ -53,7 +54,7 @@ export async function createPayment(opts: {
       price_currency: "usd",
       pay_currency: opts.payCurrency,
       order_id: opts.orderId,
-      order_description: "SinTrades deposit",
+      order_description: `${BRAND_NAME} deposit`,
       ipn_callback_url: opts.ipnUrl,
     }),
     cache: "no-store",
@@ -114,7 +115,7 @@ export async function createInvoice(opts: {
       price_amount: opts.amountUsd,
       price_currency: "usd",
       order_id: opts.orderId,
-      order_description: "SinTrades deposit",
+      order_description: `${BRAND_NAME} deposit`,
       ipn_callback_url: opts.ipnUrl,
       success_url: opts.successUrl,
       cancel_url: opts.cancelUrl,

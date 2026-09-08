@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "./Logo";
 import { COUNTRIES } from "@/lib/countries";
+import { BRAND_NAME } from "@/lib/brand";
 
 type Mode = "signin" | "signup";
 
@@ -71,7 +72,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
         {/* Brand (mobile) */}
         <div className="mb-6 flex items-center justify-center gap-2 sm:hidden">
           <Logo className="h-9 w-9" />
-          <span className="text-2xl font-bold tracking-tight">SinTrades</span>
+          <span className="text-2xl font-bold tracking-tight">{BRAND_NAME}</span>
         </div>
 
         {/* ---------- Desktop: sliding two-panel ---------- */}
@@ -132,7 +133,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
             />
           )}
           <p className="mt-5 text-center text-sm text-muted">
-            {mode === "signin" ? "New to SinTrades? " : "Already have an account? "}
+            {mode === "signin" ? `New to ${BRAND_NAME}? ` : "Already have an account? "}
             <button
               onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
               className="font-semibold text-brand"
@@ -162,7 +163,7 @@ function BrandPanel({ mode, onToggle }: { mode: Mode; onToggle: () => void }) {
       <div className="absolute inset-0 bg-black/10" />
       <div className="relative z-10 flex flex-col items-center">
         <Logo className="h-12 w-12" />
-        <div className="mt-3 text-2xl font-black tracking-tight">SinTrades</div>
+        <div className="mt-3 text-2xl font-black tracking-tight">{BRAND_NAME}</div>
         <h3 className="mt-6 text-xl font-bold">
           {signup ? "Welcome back!" : "New here?"}
         </h3>

@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
+import { BRAND_NAME } from "@/lib/brand";
 import {
   isB2cConfigured,
   normalizePhone,
@@ -175,7 +176,7 @@ export async function POST(req: Request) {
       const b2c = await b2cPayment({
         phone,
         amountKes,
-        remarks: "SinTrades withdrawal",
+        remarks: `${BRAND_NAME} withdrawal`,
         resultUrl: `${cbBase}/api/mpesa/b2c-result${q}`,
         timeoutUrl: `${cbBase}/api/mpesa/b2c-timeout${q}`,
       });
