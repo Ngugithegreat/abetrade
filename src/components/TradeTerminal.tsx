@@ -384,14 +384,6 @@ export function TradeTerminal() {
               <span className="ml-auto">{demo ? "Demo · practice market" : "Live · Deriv feed"}</span>
             </div>
             <div className="relative min-h-0 flex-1">
-              {/* DEMO watermark — makes it unmistakable you're on the practice account */}
-              {demo && (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden">
-                  <span className="select-none -rotate-[18deg] text-[clamp(3rem,13vw,9rem)] font-black uppercase tracking-[0.15em] text-gold/10">
-                    Demo
-                  </span>
-                </div>
-              )}
               {feed.points.length === 0 ? (
                 <ChartSkeleton connected={feed.connected} />
               ) : (

@@ -17,12 +17,10 @@ import {
   Loader2,
   Copy,
   Check,
-  ShieldCheck,
-  ShieldAlert,
   FlaskConical,
   RotateCcw,
 } from "lucide-react";
-import { useApp, Txn, AppUser } from "./app-context";
+import { useApp, Txn } from "./app-context";
 import { money, shortTime } from "@/lib/format";
 import { railsForCountry } from "@/lib/countries";
 import { ListSkeleton } from "./Skeleton";
@@ -52,6 +50,7 @@ export function WalletView() {
   const { user, balance, data, config, refresh, setBalance, loading, demo } = useApp();
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const rate = config?.usdKesRate ?? 130;
+  const withdrawRate = config?.usdKesWithdrawRate ?? 127;
   const country = user?.country ?? null;
 
   // Open on the tab the nav's Deposit/Withdraw button asked for (?action=…),
@@ -158,7 +157,7 @@ export function WalletView() {
               <MoneyForm
                 kind="withdraw"
                 max={balance}
-                rate={rate}
+                rate={withdrawRate}
                 methodIds={withdrawMethods(country)}
                 mpesaAutomated={!!config?.mpesaWithdraw}
                 defaultPhone={user?.phone ?? null}
@@ -186,7 +185,6 @@ export function WalletView() {
         </div>
       </div>
 
-      {!demo && user && <KycCard user={user} refresh={refresh} />}
     </div>
   );
 }
@@ -438,108 +436,6 @@ function CryptoDepositPanel({
       <button onClick={onReset} className="btn btn-ghost w-full py-2.5 text-sm">
         {status === "failed" ? "Start over" : "Cancel"}
       </button>
-    </div>
-  );
-}
-
-function KycCard({ user, refresh }: { user: AppUser; refresh: () => Promise<void> }) {
-  const status = user.kyc_status || "none";
-  const [name, setName] = useState(user.name || "");
-  const [idNumber, setIdNumber] = useState("");
-  const [phone, setPhone] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-
-  if (status === "approved") {
-    return (
-      <div className="card flex items-center gap-3 p-4">
-        <ShieldCheck className="h-6 w-6 text-up" />
-        <div>
-          <div className="text-sm font-bold">Identity verified</div>
-          <div className="text-xs text-muted">Your account is fully verified — no withdrawal limits.</div>
-        </div>
-        <span className="ml-auto rounded-md bg-up/15 px-2 py-0.5 text-[10px] font-bold uppercase text-up">
-          Verified
-        </span>
-      </div>
-    );
-  }
-
-  if (status === "pending") {
-    return (
-      <div className="card flex items-center gap-3 p-4">
-        <Clock className="h-6 w-6 text-gold" />
-        <div>
-          <div className="text-sm font-bold">Verification under review</div>
-          <div className="text-xs text-muted">
-            We're reviewing your details — this is usually done within a few hours. We'll email you.
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  async function submit() {
-    setErr(null);
-    if (name.trim().length < 3 || idNumber.trim().length < 4 || phone.trim().length < 7) {
-      setErr("Please fill in all fields correctly.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch("/api/kyc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, idNumber, phone }),
-      });
-      const json = await res.json();
-      if (!res.ok) setErr(json.error || "Could not submit.");
-      else await refresh();
-    } catch {
-      setErr("Network error. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="card p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-bold">
-          <ShieldAlert className="h-4 w-4 text-brand" /> Verify your identity
-        </div>
-        {!open && (
-          <button onClick={() => setOpen(true)} className="btn btn-brand shrink-0 px-4 py-2.5 text-sm">
-            {status === "rejected" ? "Resubmit verification" : "Verify identity"}
-          </button>
-        )}
-      </div>
-
-      {status === "rejected" && user.kyc_reason && (
-        <div className="mt-3 rounded-xl border border-down/40 bg-down/10 px-3 py-2 text-xs text-down">
-          Your last submission was declined: {user.kyc_reason} — please correct and resubmit.
-        </div>
-      )}
-
-      {open && (
-        <>
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            <input className="input" placeholder="Full legal name" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="input" placeholder="ID / passport no." value={idNumber} onChange={(e) => setIdNumber(e.target.value)} />
-            <input className="input" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </div>
-          {err && <p className="mt-2 text-xs text-down">{err}</p>}
-          <div className="mt-3 flex gap-2">
-            <button onClick={submit} disabled={busy} className="btn btn-brand px-5 py-2.5 text-sm">
-              {busy ? "Submitting…" : "Submit for verification"}
-            </button>
-            <button onClick={() => setOpen(false)} className="btn btn-ghost px-4 py-2.5 text-sm">
-              Cancel
-            </button>
-          </div>
-        </>
-      )}
     </div>
   );
 }

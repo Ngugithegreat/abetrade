@@ -71,6 +71,7 @@ export type AppConfig = {
   cryptoDeposit: boolean;
   ugMobileDeposit: boolean;
   usdKesRate: number;
+  usdKesWithdrawRate: number;
   usdUgxRate: number;
   globalTest?: boolean;
 };

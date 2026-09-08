@@ -7,7 +7,7 @@ import { getGlobalTest } from "@/lib/settings";
 import { referralStats } from "@/lib/referral";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
 import { reconcilePendingMpesaDeposits } from "@/lib/deposits";
-import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
+import { isMpesaConfigured, isB2cConfigured, usdKesRate, usdKesWithdrawRate } from "@/lib/mpesa";
 import { isPaystackConfigured } from "@/lib/paystack";
 import { isCryptoConfigured } from "@/lib/crypto-pay";
 import { isCollectoConfigured, usdUgxRate } from "@/lib/collecto";
@@ -71,6 +71,7 @@ export async function GET() {
       cryptoDeposit: isCryptoConfigured(),
       ugMobileDeposit: isCollectoConfigured(),
       usdKesRate: usdKesRate(),
+      usdKesWithdrawRate: usdKesWithdrawRate(),
       usdUgxRate: usdUgxRate(),
       globalTest,
     },

@@ -54,6 +54,20 @@ export function centsToKes(cents: number): number {
   return Math.max(1, Math.round((cents / 100) * usdKesRate()));
 }
 
+/**
+ * Withdrawal (payout) rate — deliberately LOWER than the deposit rate so the
+ * spread is the platform's margin on cash-out. Defaults to 127 KES/USD.
+ */
+export function usdKesWithdrawRate(): number {
+  const r = Number(process.env.USD_KES_WITHDRAW_RATE);
+  return Number.isFinite(r) && r > 0 ? r : 127;
+}
+
+/** USD cents -> whole KES paid out on withdrawal (uses the withdrawal rate). */
+export function centsToKesWithdraw(cents: number): number {
+  return Math.max(1, Math.round((cents / 100) * usdKesWithdrawRate()));
+}
+
 /** Normalise a Kenyan number to 2547XXXXXXXX / 2541XXXXXXXX. Returns null if invalid. */
 export function normalizePhone(input: string): string | null {
   let p = String(input).trim().replace(/[\s+\-()]/g, "");

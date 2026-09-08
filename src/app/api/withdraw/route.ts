@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
-import { requiresKyc, getKycStatus } from "@/lib/kyc";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
 import {
   isB2cConfigured,
   normalizePhone,
-  centsToKes,
+  centsToKesWithdraw,
   b2cPayment,
   callbackBase,
   callbackToken,
@@ -88,19 +87,30 @@ export async function POST(req: Request) {
     );
   }
 
-  // Large withdrawals require an approved identity verification.
-  if (requiresKyc(amount)) {
-    const kyc = await getKycStatus(session.id);
-    if (kyc !== "approved") {
-      return NextResponse.json(
-        {
-          error:
-            "Withdrawals of $200 or more require identity verification. Please verify your account in the Wallet, then try again.",
-          kycRequired: true,
-        },
-        { status: 403 }
-      );
-    }
+  // Anti-banking rule: SinTrades is a trading platform, not a wallet. You can't
+  // deposit and cash straight back out — you must actually trade first. We
+  // require lifetime trading turnover (total staked) to be at least your
+  // lifetime deposits before any withdrawal. Winnings are freely withdrawable;
+  // a fresh deposit unlocks only after it has been traded through.
+  const flow = (await sql`
+    SELECT
+      COALESCE((SELECT SUM(amount) FROM abetrade_transactions
+                 WHERE user_id = ${session.id} AND type = 'deposit'
+                   AND status = 'completed' AND is_demo = false), 0) AS deposited,
+      COALESCE((SELECT SUM(-amount) FROM abetrade_transactions
+                 WHERE user_id = ${session.id} AND type = 'trade_stake'
+                   AND is_demo = false), 0) AS staked
+  `) as Array<{ deposited: string | number; staked: string | number }>;
+  const deposited = Number(flow[0]?.deposited ?? 0);
+  const staked = Number(flow[0]?.staked ?? 0);
+  if (staked < deposited) {
+    const needMore = (deposited - staked) / 100;
+    return NextResponse.json(
+      {
+        error: `Trade before withdrawing. Place trades worth about $${needMore.toFixed(2)} more to unlock cash-out — deposited funds can't be withdrawn until they've been traded.`,
+      },
+      { status: 403 }
+    );
   }
 
   // Instant-withdrawal daily limits (per account, resets at UTC midnight).
@@ -156,7 +166,7 @@ export async function POST(req: Request) {
 
   // ---- Automated M-Pesa payout via B2C ----
   if (automated && phone) {
-    const amountKes = centsToKes(amount);
+    const amountKes = centsToKesWithdraw(amount);
     try {
       const cbBase = callbackBase(req.url);
       const token = callbackToken();
