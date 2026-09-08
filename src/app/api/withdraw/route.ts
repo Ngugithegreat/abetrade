@@ -162,6 +162,18 @@ export async function POST(req: Request) {
         timeoutUrl: `${cbBase}/api/mpesa/b2c-timeout${q}`,
       });
 
+      // Safaricom accepts a payout with ResponseCode "0". Anything else (bad
+      // initiator, insufficient B2C float, etc.) means it was REJECTED at
+      // submission and no callback will ever come — so refund immediately and
+      // never leave a stuck pending withdrawal / a charged client.
+      if (b2c.ResponseCode !== "0" || !b2c.ConversationID) {
+        await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${session.id}`;
+        return NextResponse.json(
+          { error: b2c.ResponseDescription || "Could not send the M-Pesa payout. You were not charged." },
+          { status: 502 }
+        );
+      }
+
       const rows = (await sql`
         INSERT INTO abetrade_transactions
           (user_id, type, amount, status, method, reference, provider_ref, note)

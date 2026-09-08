@@ -5,9 +5,9 @@ import { callbackToken } from "@/lib/mpesa";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Safaricom calls this if the B2C request times out in their queue. We do NOT
-// auto-refund here (the payout may still have gone through) — we flag the
-// pending withdrawal so an admin can reconcile it from the admin panel.
+// Safaricom calls this if the B2C request times out in its queue — meaning the
+// payout did NOT process. We release the reservation back to the user's balance
+// so a failed withdrawal never leaves the client charged.
 export async function POST(req: Request) {
   const token = callbackToken();
   if (token) {
@@ -31,12 +31,18 @@ export async function POST(req: Request) {
   if (conversationId || originatorId) {
     await ensureSchema();
     const sql = db();
-    await sql`
+    // Atomically claim the pending row, then refund the reserved amount once.
+    const claimed = (await sql`
       UPDATE abetrade_transactions
-      SET note = 'B2C queue timeout — needs review'
+      SET status = 'rejected', note = 'B2C queue timeout — payout not processed, refunded'
       WHERE (provider_ref = ${conversationId ?? ""} OR provider_ref = ${originatorId ?? ""})
         AND type = 'withdrawal' AND status = 'pending'
-    `;
+      RETURNING user_id, amount
+    `) as Array<{ user_id: number; amount: number | string }>;
+    if (claimed.length) {
+      // amount is stored negative -> subtract to add it back to the balance.
+      await sql`UPDATE abetrade_users SET balance = balance - ${Number(claimed[0].amount)} WHERE id = ${claimed[0].user_id}`;
+    }
   }
 
   return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted" });
