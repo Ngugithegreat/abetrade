@@ -42,7 +42,7 @@ import {
   multiplierPnl,
   lastDigit,
   digitPayoutMult,
-  digitWins,
+  pickForcedDigit,
   DigitSubtype,
 } from "@/lib/markets";
 import { money, cents } from "@/lib/format";
@@ -297,10 +297,8 @@ export function TradeTerminal() {
       const sub = t.subtype as DigitSubtype;
       const pred = t.prediction || t.direction;
       const bar = Number(t.barrier ?? 0);
-      let d = won ? 0 : 0;
-      for (let i = 0; i < 10; i++) {
-        if (digitWins(sub, pred, bar, i) === won) { d = i; break; }
-      }
+      // Same seeded digit the server will settle to (varied per trade).
+      const d = pickForcedDigit(sub, pred, bar, won, Number(t.id));
       const scaleD = Math.pow(10, dp);
       let scaled = Math.round(entry * scaleD);
       scaled = scaled - (((scaled % 10) + 10) % 10) + d; // set last digit to d
@@ -1269,7 +1267,7 @@ function OpenPositions({ trades, settled = [], onSettled, liveSymbol, livePrice,
           <div
             key={`s-${t.id}`}
             onClick={() => onSelect?.(t)}
-            className={`animate-fade-up flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 ${
+            className={`animate-settle-out flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 ${
               won ? "border-up/40 bg-up/10" : "border-down/40 bg-down/10"
             }`}
           >

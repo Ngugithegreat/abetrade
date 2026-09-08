@@ -216,6 +216,22 @@ body {
   }
 }
 
+/* Settled trade card: fade in, hold, then slide out as it hands off to history */
+@keyframes settleOut {
+  0% { opacity: 0; transform: translateY(8px); }
+  12% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(-18px); }
+}
+.animate-settle-out {
+  animation: settleOut 1.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-settle-out {
+    animation: none;
+  }
+}
+
 /* Clean shake on a losing trade */
 @keyframes shakeX {
   0%, 100% { transform: translateX(0); }

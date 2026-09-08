@@ -146,6 +146,26 @@ export function digitWins(
   return prediction === "over" ? digit > barrier : digit < barrier;
 }
 
+/**
+ * For a FORCED (test/demo) digit outcome, pick a last digit that satisfies the
+ * win/lose result — chosen deterministically from `seed` (the trade id) so the
+ * client-steered chart and the server settlement agree, but the digit VARIES
+ * across trades (instead of always being the first valid one, e.g. 0 for even),
+ * making the sim feel real.
+ */
+export function pickForcedDigit(
+  subtype: DigitSubtype,
+  prediction: string,
+  barrier: number,
+  won: boolean,
+  seed: number
+): number {
+  const valid: number[] = [];
+  for (let d = 0; d < 10; d++) if (digitWins(subtype, prediction, barrier, d) === won) valid.push(d);
+  if (!valid.length) return 0;
+  return valid[Math.abs(Math.trunc(seed)) % valid.length];
+}
+
 // Stake limits (cents)
 export const MIN_STAKE = 50;
 export const MAX_STAKE = 500000;

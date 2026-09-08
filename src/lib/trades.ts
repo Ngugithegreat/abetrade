@@ -7,6 +7,7 @@ import {
   lastDigit,
   decimalsFor,
   digitWins,
+  pickForcedDigit,
   DigitSubtype,
 } from "./markets";
 
@@ -61,13 +62,15 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
     // sim outcome — no real feed needed, so it matches what the chart showed.
     won = trade.forced_outcome === "win";
     if (trade.kind === "digit") {
-      let d = 0;
-      for (let i = 0; i < 10; i++) {
-        if (digitWins(trade.subtype as DigitSubtype, trade.prediction || trade.direction, Number(trade.barrier ?? 0), i) === won) {
-          d = i;
-          break;
-        }
-      }
+      // Varied-but-deterministic digit (seeded by trade id) so it isn't stuck
+      // on the same value, while matching the client-steered chart.
+      const d = pickForcedDigit(
+        trade.subtype as DigitSubtype,
+        trade.prediction || trade.direction,
+        Number(trade.barrier ?? 0),
+        won,
+        Number(trade.id)
+      );
       exitDigit = d;
       const sc = Math.pow(10, dec);
       let scaled = Math.round(entry * sc);
