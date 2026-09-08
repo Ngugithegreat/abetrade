@@ -73,9 +73,18 @@ function analyze(symbol: string, points: { price: number }[]): Signal | null {
   return { symbol, confidence, ...best };
 }
 
-/** Ranked live signals across all markets (shared by the scanner UI and the AI bot). */
-export function computeSignals(markets: Record<string, MarketTick>): Signal[] {
-  return MARKETS.map((m) => analyze(m.symbol, markets[m.symbol]?.points ?? []))
+/**
+ * Ranked live signals (shared by the scanner UI and the AI bot). Pass `symbols`
+ * to limit the scan to specific markets; omit for all markets.
+ */
+export function computeSignals(
+  markets: Record<string, MarketTick>,
+  symbols?: string[]
+): Signal[] {
+  const list =
+    symbols && symbols.length ? MARKETS.filter((m) => symbols.includes(m.symbol)) : MARKETS;
+  return list
+    .map((m) => analyze(m.symbol, markets[m.symbol]?.points ?? []))
     .filter((s): s is Signal => !!s)
     .sort((a, b) => b.confidence - a.confidence);
 }

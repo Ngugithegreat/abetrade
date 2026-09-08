@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Play, Square, Bot, Target, ShieldAlert, Sparkles } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Play, Square, Bot, Target, ShieldAlert, Sparkles, RefreshCw, Radar } from "lucide-react";
 import { money, cents } from "@/lib/format";
-import { MAX_STAKE, DigitSubtype, marketBySymbol } from "@/lib/markets";
+import { MAX_STAKE, MARKETS, DigitSubtype, marketBySymbol } from "@/lib/markets";
 import { computeSignals } from "./AiScanner";
 import type { MarketTick } from "@/lib/useDerivFeed";
 import { primeAudio } from "@/lib/feedback";
@@ -64,6 +64,11 @@ export function BotPanel({
 
   const [side, setSide] = useState(sides[0]);
   const [aiMode, setAiMode] = useState(false);
+  const [aiMarkets, setAiMarkets] = useState<string[]>(MARKETS.map((m) => m.symbol));
+  const aiMarketsRef = useRef(aiMarkets);
+  aiMarketsRef.current = aiMarkets;
+  const [scanTick, setScanTick] = useState(0);
+  const [scanning, setScanning] = useState(false);
   const [preset, setPreset] = useState<PresetName>("Balanced");
   const [martingale, setMartingale] = useState<string>(PRESETS.Balanced.martingale);
   const [targetProfit, setTargetProfit] = useState<string>(PRESETS.Balanced.targetProfit);
@@ -79,6 +84,22 @@ export function BotPanel({
 
   if (!sides.includes(side)) setTimeout(() => setSide(sides[0]), 0);
 
+  // Live top signals for the AI-selected markets (recomputed on tick + rescan).
+  const topSignals = useMemo(
+    () => computeSignals(markets, aiMarkets).slice(0, 3),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [markets, aiMarkets, scanTick]
+  );
+
+  function rescan() {
+    setScanning(true);
+    setScanTick((t) => t + 1);
+    setTimeout(() => setScanning(false), 900);
+  }
+  function toggleMarket(sym: string) {
+    setAiMarkets((cur) => (cur.includes(sym) ? cur.filter((s) => s !== sym) : [...cur, sym]));
+  }
+
   function applyPreset(name: PresetName) {
     setPreset(name);
     const p = PRESETS[name];
@@ -93,7 +114,7 @@ export function BotPanel({
     let body: Record<string, unknown>;
     let label: string;
     if (aiMode) {
-      const top = computeSignals(marketsRef.current)[0];
+      const top = computeSignals(marketsRef.current, aiMarketsRef.current)[0];
       if (!top) return { error: "AI: gathering ticks…", soft: true as const };
       const short = marketBySymbol(top.symbol)?.short ?? top.symbol;
       setAiPick(`${short} · ${top.label} (${top.confidence}%)`);
@@ -223,6 +244,87 @@ export function BotPanel({
           <span className={`block h-3 w-3 rounded-full bg-white transition ${aiMode ? "translate-x-4" : ""}`} />
         </span>
       </button>
+
+      {/* AI market selection + live scan */}
+      {aiMode && (
+        <div className="space-y-2 rounded-xl border border-brand/30 bg-brand/[0.06] p-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold">Markets to scan</label>
+            <button
+              type="button"
+              disabled={running}
+              onClick={() =>
+                setAiMarkets((cur) =>
+                  cur.length === MARKETS.length ? [MARKETS[0].symbol] : MARKETS.map((m) => m.symbol)
+                )
+              }
+              className="text-[11px] font-semibold text-brand hover:underline"
+            >
+              {aiMarkets.length === MARKETS.length ? "Clear" : "Select all"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {MARKETS.map((m) => {
+              const on = aiMarkets.includes(m.symbol);
+              return (
+                <button
+                  key={m.symbol}
+                  type="button"
+                  disabled={running}
+                  onClick={() => toggleMarket(m.symbol)}
+                  className={`rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
+                    on ? "bg-brand text-white" : "border border-border bg-surface2/60 text-muted hover:text-fg"
+                  }`}
+                >
+                  {m.short}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between pt-0.5">
+            <span className="flex items-center gap-1.5 text-[11px] text-muted">
+              <Radar className={`h-3.5 w-3.5 ${scanning ? "animate-spin text-brand" : "text-muted"}`} />
+              {scanning ? "Scanning…" : `Top signals · ${aiMarkets.length || MARKETS.length} market(s)`}
+            </span>
+            <button
+              type="button"
+              onClick={rescan}
+              className="btn btn-ghost px-2.5 py-1 text-[11px]"
+            >
+              <RefreshCw className="h-3 w-3" /> Rescan
+            </button>
+          </div>
+
+          <div className="space-y-1.5">
+            {(scanning ? [] : topSignals).length === 0 ? (
+              <div className="rounded-lg bg-surface2/50 px-3 py-2 text-center text-[11px] text-muted">
+                {scanning ? "Reading live ticks…" : "Gathering ticks — try Rescan in a moment."}
+              </div>
+            ) : (
+              topSignals.map((s, i) => {
+                const mk = marketBySymbol(s.symbol);
+                return (
+                  <div key={s.symbol} className="flex items-center gap-2 rounded-lg bg-surface2/50 px-2.5 py-1.5">
+                    <span className="text-[10px] font-bold text-brand">#{i + 1}</span>
+                    <span className="text-xs font-semibold">{mk?.short ?? s.symbol}</span>
+                    <span className="rounded bg-brand/15 px-1.5 py-0.5 text-[10px] font-bold text-brand">{s.label}</span>
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <span className="h-1 w-12 overflow-hidden rounded-full bg-surface2">
+                        <span className="block h-full rounded-full bg-gradient-to-r from-brand-light to-brand" style={{ width: `${s.confidence}%` }} />
+                      </span>
+                      <span className="tabular text-[11px] font-bold">{s.confidence}%</span>
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <p className="text-[10px] leading-relaxed text-muted">
+            The bot trades the strongest live signal from your selected markets each run.
+          </p>
+        </div>
+      )}
 
       {/* Side (hidden in AI mode — the AI picks) */}
       {!aiMode && (
