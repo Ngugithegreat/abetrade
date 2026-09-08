@@ -16,12 +16,14 @@ export function DigitHeatmap({
   window = 50,
   onPick,
   selected,
+  flash,
 }: {
   points: Point[];
   decimals: number;
   window?: number;
   onPick?: (d: number) => void;
   selected?: number | null;
+  flash?: { digit: number; won: boolean } | null;
 }) {
   const { pcts, current, hot } = useMemo(() => {
     const recent = points.slice(-window);
@@ -45,8 +47,10 @@ export function DigitHeatmap({
         const isCurrent = d === current;
         const isHot = d === hot;
         const isSel = selected === d;
+        const isFlash = !!flash && flash.digit === d;
+        const flashColor = flash?.won ? "#00E39A" : "#FF4D6D";
         const frac = pct / maxPct;
-        const stroke = isCurrent ? BRAND_HEX : isHot ? "#00E39A" : "#8b93a6";
+        const stroke = isFlash ? flashColor : isCurrent ? BRAND_HEX : isHot ? "#00E39A" : "#8b93a6";
         return (
           <button
             key={d}
@@ -55,8 +59,8 @@ export function DigitHeatmap({
               isSel ? "bg-brand/10 ring-1 ring-brand" : ""
             } ${onPick ? "cursor-pointer hover:bg-surface2" : "cursor-default"}`}
           >
-            <div className="relative h-8 w-8 sm:h-12 sm:w-12">
-              {isCurrent && (
+            <div className={`relative h-8 w-8 sm:h-12 sm:w-12 ${isFlash ? "animate-pulse" : ""}`}>
+              {isCurrent && !isFlash && (
                 <span className="absolute -top-2 left-1/2 h-0 w-0 -translate-x-1/2 border-x-4 border-t-4 border-x-transparent border-t-brand" />
               )}
               <svg viewBox="0 0 40 40" className="h-8 w-8 sm:h-12 sm:w-12">
@@ -70,9 +74,15 @@ export function DigitHeatmap({
                   strokeWidth="3.5"
                   strokeLinecap="round"
                   strokeDasharray={C}
-                  strokeDashoffset={C * (1 - Math.max(0.04, frac))}
+                  strokeDashoffset={isFlash ? 0 : C * (1 - Math.max(0.04, frac))}
                   transform="rotate(-90 20 20)"
-                  style={isCurrent ? { filter: `drop-shadow(0 0 4px rgba(${BRAND_RGB},0.6))` } : undefined}
+                  style={
+                    isFlash
+                      ? { filter: `drop-shadow(0 0 6px ${flashColor})` }
+                      : isCurrent
+                      ? { filter: `drop-shadow(0 0 4px rgba(${BRAND_RGB},0.6))` }
+                      : undefined
+                  }
                 />
                 <text
                   x="20"
@@ -81,7 +91,7 @@ export function DigitHeatmap({
                   dominantBaseline="central"
                   fontSize="14"
                   fontWeight="700"
-                  fill={isCurrent ? BRAND_HEX : "rgb(var(--fg))"}
+                  fill={isFlash ? flashColor : isCurrent ? BRAND_HEX : "rgb(var(--fg))"}
                 >
                   {d}
                 </text>

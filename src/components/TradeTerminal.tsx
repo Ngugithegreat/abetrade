@@ -93,6 +93,7 @@ export function TradeTerminal() {
   const [receipt, setReceipt] = useState<Trade | null>(null);
   const [botPreset, setBotPreset] = useState<{ side: string; key: number } | null>(null);
   const [resultFlash, setResultFlash] = useState<{ won: boolean; profit: number; label: string; sub: string; id: number } | null>(null);
+  const [flashDigit, setFlashDigit] = useState<{ digit: number; won: boolean } | null>(null);
   const lastClosedRef = useRef<number | null>(null);
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
@@ -159,6 +160,10 @@ export function TradeTerminal() {
         sub: `${marketBySymbol(top.symbol)?.short ?? top.symbol} · ${dir}`,
         id: top.id,
       });
+      // Highlight the settled digit on the strip (green won / red lost).
+      if (top.kind === "digit" && top.exit_digit != null) {
+        setFlashDigit({ digit: Number(top.exit_digit), won });
+      }
       if (won) celebrateWin();
       else signalLoss();
     }
@@ -171,6 +176,12 @@ export function TradeTerminal() {
     const t = setTimeout(() => setResultFlash(null), 4000);
     return () => clearTimeout(t);
   }, [resultFlash]);
+
+  useEffect(() => {
+    if (!flashDigit) return;
+    const t = setTimeout(() => setFlashDigit(null), 2800);
+    return () => clearTimeout(t);
+  }, [flashDigit]);
 
   // Draw open Rise/Fall & Multiplier positions on the chart (entry + stop-out lines).
   const chartMarkers = openTrades
@@ -498,6 +509,7 @@ export function TradeTerminal() {
                   decimals={dp}
                   onPick={(d) => setBarrier(d)}
                   selected={subtype !== "even_odd" ? barrier : null}
+                  flash={flashDigit}
                 />
               </div>
             )}

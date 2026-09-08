@@ -130,6 +130,8 @@ export function BotPanel({
 
     // Let the terminal play the bot's trade out on the sim chart.
     if (sim && onSimTrade) onSimTrade(trade);
+    // Surface the freshly-opened trade in the Open positions panel while it runs.
+    refresh();
 
     const expiryMs = Number(trade.expiry_epoch) * 1000;
     while (Date.now() < expiryMs + 400) {
