@@ -14,7 +14,7 @@ export type TestFeedState = {
   last: Point | null;
   prev: Point | null;
   connected: boolean;
-  steer: (target: number, deadlineEpoch: number, exact?: boolean, entry?: number) => void;
+  steer: (target: number, deadlineEpoch: number, exact?: boolean, entry?: number, straight?: boolean) => void;
 };
 
 // Plausible starting levels so the sim looks like the real indices.
@@ -32,6 +32,7 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
     exact: boolean;
     entry: number;
     start: number;
+    straight: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -72,6 +73,21 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
           // is what settles it), still with full noise so it looks alive.
           const drift = (st.target - cur) * (0.18 + 0.6 / Math.max(1, timeLeft));
           next = cur + drift + (Math.random() - 0.5) * 2 * vol;
+        } else if (st.straight) {
+          // No tease: move firmly onto the outcome side of entry and STAY there,
+          // so the position is in loss (or profit) from entry to close — no chance
+          // to close on the wrong side. Used for forced losing trades and
+          // multipliers, where the trader can close early.
+          const dir = st.target >= st.entry ? 1 : -1;
+          const finalMag = Math.max(Math.abs(st.target - st.entry), vol * 5);
+          const aim = st.entry + dir * finalMag;
+          // Small noise that never crosses back over entry.
+          const noise = (Math.random() - 0.5) * vol * 0.8;
+          next = cur + (aim - cur) * 0.4 + noise;
+          // Clamp to keep it on the correct side of entry (a hair beyond it).
+          const guard = st.entry + dir * Math.max(vol * 0.5, Math.abs(finalMag) * 0.15);
+          if (dir > 0) next = Math.max(next, guard);
+          else next = Math.min(next, guard);
         } else {
           // Rise/Fall & Multipliers: make the trade feel real. Even a trade that
           // WILL win first teases toward the losing side, then swings back and
@@ -118,13 +134,14 @@ export function useTestFeed(symbol: string, enabled: boolean): TestFeedState {
     last,
     prev,
     connected: enabled,
-    steer: (target, deadline, exact = false, entry?) => {
+    steer: (target, deadline, exact = false, entry?, straight = false) => {
       steerRef.current = {
         target,
         deadline,
         exact,
         entry: entry ?? priceRef.current,
         start: Math.floor(Date.now() / 1000),
+        straight,
       };
     },
   };

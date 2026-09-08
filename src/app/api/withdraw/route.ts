@@ -5,6 +5,7 @@ import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/li
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
 import { BRAND_NAME } from "@/lib/brand";
+import { isTestEmail } from "@/lib/testmode";
 import {
   isB2cConfigured,
   normalizePhone,
@@ -36,8 +37,8 @@ export async function POST(req: Request) {
   const method = String(body.method || "manual");
   const rawRef = String(body.reference || "").trim();
 
-  if (!Number.isFinite(amount) || amount < 100) {
-    return NextResponse.json({ error: "Minimum withdrawal is $1.00." }, { status: 400 });
+  if (!Number.isFinite(amount) || amount < 500) {
+    return NextResponse.json({ error: "Minimum withdrawal is $5.00." }, { status: 400 });
   }
   if (!rawRef) {
     return NextResponse.json(
@@ -70,22 +71,25 @@ export async function POST(req: Request) {
     );
   }
 
-  // Must-trade rule: you can't deposit and cash straight back out — you have to
-  // place at least ONE trade first. Any single real trade unlocks withdrawals.
-  // (Locked bonus can still never be withdrawn.)
   const flow = (await sql`
     SELECT
-      balance,
+      balance, email, is_test,
       COALESCE(bonus_locked, 0) AS bonus_locked,
       COALESCE((SELECT COUNT(*) FROM abetrade_trades
                  WHERE user_id = ${session.id} AND is_demo = false), 0) AS trades
     FROM abetrade_users WHERE id = ${session.id} LIMIT 1
-  `) as Array<{ balance: string | number; bonus_locked: string | number; trades: string | number }>;
+  `) as Array<{ balance: string | number; email: string; is_test: boolean; bonus_locked: string | number; trades: string | number }>;
   const bal = Number(flow[0]?.balance ?? 0);
   const locked = Number(flow[0]?.bonus_locked ?? 0);
   const trades = Number(flow[0]?.trades ?? 0);
+  // Whitelisted test accounts (admin Test accounts / TEST_EMAILS) bypass the
+  // withdrawal restrictions (must-trade, daily caps, bonus lock) so QA can cash
+  // out freely.
+  const isTester = !!flow[0]?.is_test || isTestEmail(flow[0]?.email);
 
-  if (trades < 1) {
+  // Must-trade rule: you can't deposit and cash straight back out — you have to
+  // place at least ONE trade first. Any single real trade unlocks withdrawals.
+  if (!isTester && trades < 1) {
     return NextResponse.json(
       {
         error: `Place at least one trade before withdrawing — ${BRAND_NAME} is a trading platform, so open a trade first, then you can withdraw.`,
@@ -94,8 +98,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // Withdrawable = balance minus any locked bonus (bonus is never withdrawable).
-  const withdrawable = Math.max(0, bal - locked);
+  // Withdrawable = balance minus any locked bonus (testers ignore the bonus lock).
+  const withdrawable = Math.max(0, bal - (isTester ? 0 : locked));
   if (amount > withdrawable) {
     return NextResponse.json(
       { error: `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.` },
@@ -104,38 +108,48 @@ export async function POST(req: Request) {
   }
 
   // Instant-withdrawal daily limits (per account, resets at UTC midnight).
-  const [maxCount, maxDaily] = await Promise.all([getWithdrawDailyCount(), getWithdrawDailyMaxCents()]);
-  const today = (await sql`
-    SELECT COUNT(*)::int AS n, COALESCE(SUM(-amount), 0) AS total
-    FROM abetrade_transactions
-    WHERE user_id = ${session.id} AND type = 'withdrawal' AND status != 'rejected'
-      AND created_at >= date_trunc('day', now())
-  `) as Array<{ n: number; total: string | number }>;
-  const usedCount = Number(today[0]?.n ?? 0);
-  const usedTotal = Number(today[0]?.total ?? 0);
-  if (usedCount >= maxCount) {
-    return NextResponse.json(
-      { error: `Daily withdrawal limit reached — you can make ${maxCount} withdrawal${maxCount === 1 ? "" : "s"} per day. Try again tomorrow.` },
-      { status: 429 }
-    );
-  }
-  if (usedTotal + amount > maxDaily) {
-    const left = Math.max(0, maxDaily - usedTotal);
-    return NextResponse.json(
-      { error: `This exceeds your daily withdrawal limit of $${(maxDaily / 100).toFixed(0)}. You can still withdraw $${(left / 100).toFixed(2)} today.` },
-      { status: 429 }
-    );
+  // Skipped for whitelisted testers.
+  if (!isTester) {
+    const [maxCount, maxDaily] = await Promise.all([getWithdrawDailyCount(), getWithdrawDailyMaxCents()]);
+    const today = (await sql`
+      SELECT COUNT(*)::int AS n, COALESCE(SUM(-amount), 0) AS total
+      FROM abetrade_transactions
+      WHERE user_id = ${session.id} AND type = 'withdrawal' AND status != 'rejected'
+        AND created_at >= date_trunc('day', now())
+    `) as Array<{ n: number; total: string | number }>;
+    const usedCount = Number(today[0]?.n ?? 0);
+    const usedTotal = Number(today[0]?.total ?? 0);
+    if (usedCount >= maxCount) {
+      return NextResponse.json(
+        { error: `Daily withdrawal limit reached — you can make ${maxCount} withdrawal${maxCount === 1 ? "" : "s"} per day. Try again tomorrow.` },
+        { status: 429 }
+      );
+    }
+    if (usedTotal + amount > maxDaily) {
+      const left = Math.max(0, maxDaily - usedTotal);
+      return NextResponse.json(
+        { error: `This exceeds your daily withdrawal limit of $${(maxDaily / 100).toFixed(0)}. You can still withdraw $${(left / 100).toFixed(2)} today.` },
+        { status: 429 }
+      );
+    }
   }
 
-  // Reserve funds atomically on the withdrawable balance (balance minus locked
-  // bonus). Race-safe security boundary: can't overdraw, can't withdraw locked
-  // bonus, and two concurrent requests can't both pass.
-  const debit = (await sql`
-    UPDATE abetrade_users SET balance = balance - ${amount}
-    WHERE id = ${session.id}
-      AND balance - GREATEST(COALESCE(bonus_locked, 0), 0) >= ${amount}
-    RETURNING balance
-  `) as any[];
+  // Reserve funds atomically. Race-safe: can't overdraw, and (for real users)
+  // can't withdraw locked bonus. Testers may withdraw their whole balance.
+  const debit = (
+    isTester
+      ? await sql`
+          UPDATE abetrade_users SET balance = balance - ${amount}
+          WHERE id = ${session.id} AND balance >= ${amount}
+          RETURNING balance
+        `
+      : await sql`
+          UPDATE abetrade_users SET balance = balance - ${amount}
+          WHERE id = ${session.id}
+            AND balance - GREATEST(COALESCE(bonus_locked, 0), 0) >= ${amount}
+          RETURNING balance
+        `
+  ) as any[];
 
   if (!debit.length) {
     return NextResponse.json(

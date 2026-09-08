@@ -309,7 +309,11 @@ export function TradeTerminal() {
       const delta = Math.max(0.02, Math.abs(entry) * 0.004);
       const target = wantHigher ? entry + delta : entry - delta;
       const deadline = Number(t.expiry_epoch) > nowSec ? Number(t.expiry_epoch) : nowSec + 25;
-      testFeed.steer(target, deadline, false, entry);
+      // No tease for LOSING trades and for multipliers (which can be closed
+      // early): the price sits firmly on the outcome side from entry, so a
+      // losing position is never briefly in profit.
+      const straight = !won || t.kind === "mult";
+      testFeed.steer(target, deadline, false, entry, straight);
     }
   }
 
