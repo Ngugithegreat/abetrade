@@ -121,10 +121,17 @@ export async function POST(req: Request) {
     );
   }
 
+  // Demo runs on the simulated market with a fixed, favourable win rate that is
+  // INDEPENDENT of the admin test %. Demos are meant to feel good and build
+  // confidence — never the manipulated real-account testing outcome.
+  const DEMO_WIN_PCT = 70;
+
   // Test harness: honour a forced win/lose ONLY for whitelisted TEST_EMAILS
   // accounts and only for time-settled contracts. Never trusts the client flag.
   let forcedOutcome: string | null = null;
-  if (!demo && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
+  if (demo && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
+    forcedOutcome = Math.random() * 100 < DEMO_WIN_PCT ? "win" : "lose";
+  } else if (!demo && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
     const globalTest = await getGlobalTest();
     if (globalTest || body.testMode) {
       // A whitelisted account always uses ITS OWN win % (even in global mode);

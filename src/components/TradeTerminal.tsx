@@ -91,9 +91,9 @@ export function TradeTerminal() {
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
 
   // Sim market when this account is a tester OR the whole system is in test mode.
-  // Demo trades always run on the REAL live market (authentic practice); the
-  // test-mode simulation only ever applies to a real account.
-  const sim = !demo && (!!user?.isTest || !!config?.globalTest);
+  // The chart runs on the SIMULATED feed for demo (so it always works and shows
+  // the win/loss play out) and for real test accounts / global test mode.
+  const sim = demo || !!user?.isTest || !!config?.globalTest;
   const realFeed = useDerivFeed(symbol, !sim);
   const testFeed = useTestFeed(symbol, sim);
   const feed = sim ? testFeed : realFeed;
@@ -239,10 +239,12 @@ export function TradeTerminal() {
       // entry (all contract types, so the entry line matches the chart) and flag
       // test mode so the server rolls the outcome by the admin win %.
       if (sim) {
-        body.testMode = true;
         if (feed.last) body.entry = { price: feed.last.price, epoch: feed.last.epoch };
+        // Only a REAL test account rolls by the admin %. Demo uses its own
+        // favourable rate on the server (never testMode).
+        if (!demo) body.testMode = true;
       }
-      // Practice trade on the real market with virtual funds.
+      // Practice trade with virtual funds (server rolls a favourable outcome).
       if (demo) body.demo = true;
       const res = await fetch("/api/trade", {
         method: "POST",
@@ -379,9 +381,17 @@ export function TradeTerminal() {
               <span>
                 Low <span className="tabular text-down">{lo ? lo.toFixed(dp) : "—"}</span>
               </span>
-              <span className="ml-auto">Live · Deriv feed</span>
+              <span className="ml-auto">{demo ? "Demo · practice market" : "Live · Deriv feed"}</span>
             </div>
             <div className="relative min-h-0 flex-1">
+              {/* DEMO watermark — makes it unmistakable you're on the practice account */}
+              {demo && (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden">
+                  <span className="select-none -rotate-[18deg] text-[clamp(3rem,13vw,9rem)] font-black uppercase tracking-[0.15em] text-gold/10">
+                    Demo
+                  </span>
+                </div>
+              )}
               {feed.points.length === 0 ? (
                 <ChartSkeleton connected={feed.connected} />
               ) : (
