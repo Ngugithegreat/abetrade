@@ -92,8 +92,8 @@ export async function POST(req: Request) {
   if (amount > withdrawable) {
     const msg =
       withdrawable <= 0
-        ? `Only your profit can be withdrawn — your deposits stay in to trade with. Keep trading, and once you're in profit you can cash it out. (${BRAND_NAME} is a trading platform, not a banking service.)`
-        : `You can withdraw your profit of up to $${(withdrawable / 100).toFixed(2)} right now — deposits themselves can't be withdrawn, only profit.`;
+        ? `No profit available to withdraw yet.`
+        : `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.`;
     return NextResponse.json({ error: msg }, { status: 403 });
   }
 
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
 
   if (!debit.length) {
     return NextResponse.json(
-      { error: `You can withdraw your profit of up to $${(withdrawable / 100).toFixed(2)} right now — deposits can't be withdrawn, only profit.` },
+      { error: `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.` },
       { status: 402 }
     );
   }
