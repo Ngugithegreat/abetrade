@@ -89,6 +89,74 @@ export function computeSignals(
     .sort((a, b) => b.confidence - a.confidence);
 }
 
+export type ScanResult = {
+  symbol: string;
+  subtype: DigitSubtype;
+  direction: string;
+  barrier: number;
+  quality: number; // 0-100 win-probability of the auto prediction
+  predictionLabel: string;
+};
+
+/**
+ * Deep scan: walk EVERY market for the chosen digit trade type and return the
+ * single best market + auto-prediction (highest historical win probability).
+ */
+export function deepScanBest(
+  markets: Record<string, MarketTick>,
+  subtype: DigitSubtype
+): ScanResult | null {
+  let best: ScanResult | null = null;
+  const consider = (r: ScanResult) => {
+    if (!best || r.quality > best.quality) best = r;
+  };
+
+  for (const m of MARKETS) {
+    const pts = markets[m.symbol]?.points ?? [];
+    if (pts.length < 20) continue;
+    const digits = pts.slice(-120).map((p) => lastDigit(p.price, m.decimals));
+    const n = digits.length;
+    if (!n) continue;
+
+    if (subtype === "even_odd") {
+      const evenPct = digits.filter((d) => d % 2 === 0).length / n;
+      const dir = evenPct >= 0.5 ? "even" : "odd";
+      consider({
+        symbol: m.symbol,
+        subtype,
+        direction: dir,
+        barrier: 0,
+        quality: Math.max(evenPct, 1 - evenPct) * 100,
+        predictionLabel: dir === "even" ? "Even" : "Odd",
+      });
+    } else if (subtype === "over_under") {
+      // Over N wins if last digit > N (N 0-8); Under N wins if < N (N 1-9).
+      for (let b = 1; b <= 8; b++) {
+        const overP = digits.filter((d) => d > b).length / n;
+        consider({ symbol: m.symbol, subtype, direction: "over", barrier: b, quality: overP * 100, predictionLabel: `Over ${b}` });
+        const underP = digits.filter((d) => d < b).length / n;
+        consider({ symbol: m.symbol, subtype, direction: "under", barrier: b, quality: underP * 100, predictionLabel: `Under ${b}` });
+      }
+    } else {
+      // Match/Differ — "Differs from X" wins if the digit isn't X, so pick the
+      // rarest digit for the highest win probability.
+      const counts = new Array(10).fill(0);
+      digits.forEach((d) => counts[d]++);
+      let rare = 0;
+      for (let d = 1; d < 10; d++) if (counts[d] < counts[rare]) rare = d;
+      consider({
+        symbol: m.symbol,
+        subtype,
+        direction: "differs",
+        barrier: rare,
+        quality: (1 - counts[rare] / n) * 100,
+        predictionLabel: `Differs from ${rare}`,
+      });
+    }
+  }
+  return best;
+}
+
 export function AiScanner({
   open,
   onClose,

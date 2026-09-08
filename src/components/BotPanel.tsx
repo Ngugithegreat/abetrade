@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Square, Bot, Target, ShieldAlert, Sparkles, RefreshCw, Radar } from "lucide-react";
 import { money, cents } from "@/lib/format";
 import { MAX_STAKE, MARKETS, DigitSubtype, marketBySymbol } from "@/lib/markets";
@@ -33,6 +33,8 @@ export function BotPanel({
   sim,
   getSimEntry,
   onSimTrade,
+  presetSide,
+  presetKey,
   setBalance,
   refresh,
   showToast,
@@ -49,6 +51,8 @@ export function BotPanel({
   sim?: boolean;
   getSimEntry?: () => { price: number; epoch: number } | null;
   onSimTrade?: (trade: any) => void;
+  presetSide?: string;
+  presetKey?: number;
   setBalance: (b: number) => void;
   refresh: () => void;
   showToast: (m: string, ok: boolean) => void;
@@ -82,7 +86,21 @@ export function BotPanel({
   const marketsRef = useRef(markets);
   marketsRef.current = markets;
 
-  if (!sides.includes(side)) setTimeout(() => setSide(sides[0]), 0);
+  // Keep the bot side valid when the contract / subtype changes.
+  useEffect(() => {
+    if (!sides.includes(side)) setSide(sides[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtype, contract]);
+
+  // When the Entry Scanner loads a pick, set the bot to that side (manual mode).
+  // Defined AFTER the validity effect so it wins when both run together.
+  useEffect(() => {
+    if (presetSide) {
+      setAiMode(false);
+      setSide(presetSide);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetKey]);
 
   // Live top signals for the AI-selected markets (recomputed on tick + rescan).
   const topSignals = useMemo(

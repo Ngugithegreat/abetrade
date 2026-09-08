@@ -23,7 +23,8 @@ import { useTestFeed } from "@/lib/useTestFeed";
 import { PriceChart } from "./PriceChart";
 import { DigitHeatmap } from "./DigitHeatmap";
 import { BotPanel } from "./BotPanel";
-import { AiAutoTrader } from "./AiAutoTrader";
+import { EntryScanner } from "./EntryScanner";
+import type { ScanResult } from "./AiScanner";
 import { Onboarding } from "./Onboarding";
 import { TradeReceipt } from "./TradeReceipt";
 import { celebrateWin, signalLoss, primeAudio } from "@/lib/feedback";
@@ -90,7 +91,7 @@ export function TradeTerminal() {
   const [alertPrice, setAlertPrice] = useState<number | null>(null);
   const alertPrevRef = useRef<number | null>(null);
   const [receipt, setReceipt] = useState<Trade | null>(null);
-  const [shake, setShake] = useState(false);
+  const [botPreset, setBotPreset] = useState<{ side: string; key: number } | null>(null);
   const lastClosedRef = useRef<number | null>(null);
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
@@ -142,8 +143,6 @@ export function TradeTerminal() {
         celebrateWin();
       } else if (top.status === "lost") {
         signalLoss();
-        setShake(true);
-        setTimeout(() => setShake(false), 600);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,18 +299,22 @@ export function TradeTerminal() {
   const botContract: "rise_fall" | "digit" = contract === "mult" ? "digit" : contract;
 
   return (
-    <div className={`mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden ${shake ? "animate-shake" : ""}`}>
-      <AiAutoTrader
+    <div className="mx-auto flex max-w-[1640px] flex-col px-2 py-2 sm:px-3 sm:py-3 lg:h-[calc(100vh-4rem)] lg:overflow-hidden">
+      <EntryScanner
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         markets={markets}
-        demo={demo}
-        testMode={sim && !demo}
-        digitTicks={digitTicks}
-        duration={duration}
-        setBalance={setBalance}
-        refresh={refresh}
-        showToast={showToast}
+        onLoad={(r: ScanResult) => {
+          // Load the scanned market into the terminal and open the Auto-Trader.
+          setSymbol(r.symbol);
+          setContract("digit");
+          setSubtype(r.subtype);
+          setBarrier(r.barrier);
+          setMode("auto");
+          setBotPreset({ side: r.direction, key: Date.now() });
+          setScannerOpen(false);
+          showToast(`Loaded ${marketBySymbol(r.symbol)?.short ?? r.symbol} · ${r.predictionLabel}`, true);
+        }}
       />
       <Onboarding />
       <TradeReceipt trade={receipt} onClose={() => setReceipt(null)} />
@@ -578,6 +581,8 @@ export function TradeTerminal() {
                 stakeValid={stakeValid}
                 markets={markets}
                 sim={sim}
+                presetSide={botPreset?.side}
+                presetKey={botPreset?.key}
                 getSimEntry={() =>
                   feed.last ? { price: feed.last.price, epoch: feed.last.epoch } : null
                 }
