@@ -224,28 +224,25 @@ export async function stkStatus(
   });
   const json: any = await res.json().catch(() => ({}));
 
-  // While the prompt is still on the phone (before the PIN is entered) Daraja
-  // reports "the transaction is being processed" / "still under processing".
-  // That wording can arrive as an errorMessage OR as a ResultDesc (sometimes on
-  // a 200 with an unmapped ResultCode). Any of these means KEEP WAITING — never
-  // treat it as a failure.
-  const errMsg = String(json?.errorMessage || "").toLowerCase();
-  const resultDesc = String(json?.ResultDesc || "").toLowerCase();
-  if (
-    json?.errorCode === "500.001.1001" ||
-    errMsg.includes("process") ||
-    resultDesc.includes("process")
-  ) {
-    return { state: "pending", resultCode: null, desc: "Enter your M-Pesa PIN on your phone…" };
-  }
-
+  // 1) A definitive ResultCode always wins — check it FIRST so a real success
+  //    ("0", ResultDesc "...processed successfully.") or a terminal failure is
+  //    never mistaken for "still processing". (An earlier version matched the
+  //    word "process" in the SUCCESS description and wrongly reported pending,
+  //    so successful deposits never credited.)
   const code = json?.ResultCode != null ? String(json.ResultCode) : null;
   const mapped = code ? RESULT_MAP[code] : null;
   if (mapped) return { state: mapped.state, resultCode: code, desc: mapped.desc };
 
-  // Unknown/absent result code (or a transient query error) — do NOT fail the
-  // deposit. Only the mapped codes above are terminal; everything else means we
-  // keep polling. A genuine success is also credited by the async callback.
+  // 2) HTTP-error shape while the prompt is still on the phone (before the PIN):
+  //    { errorCode: "500.001.1001", errorMessage: "...being processed" }.
+  const errMsg = String(json?.errorMessage || "").toLowerCase();
+  if (json?.errorCode === "500.001.1001" || (errMsg && errMsg.includes("process"))) {
+    return { state: "pending", resultCode: null, desc: "Enter your M-Pesa PIN on your phone…" };
+  }
+
+  // 3) Unknown/absent result code (incl. an unmapped "still under processing"
+  //    response, or a transient query error) — never fail; keep polling. A
+  //    genuine success is also credited by the async callback.
   return { state: "pending", resultCode: code, desc: "Waiting for confirmation…" };
 }
 

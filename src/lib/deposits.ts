@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { sendEmail, depositReceiptEmail } from "./email";
 import { payReferralOnDeposit } from "./referral";
+import { stkStatus } from "./mpesa";
 
 // Shared, idempotent crediting for automated deposits. Every provider webhook
 // funnels through here: it finds the PENDING deposit by its provider reference,
@@ -75,6 +76,43 @@ export async function creditPendingDeposit(
   })();
 
   return { ok: true, credited: amount };
+}
+
+/**
+ * Safety net for automated M-Pesa deposits: re-queries Safaricom for any recent
+ * pending deposit and credits it if it was actually paid (or drops it if it
+ * cancelled/failed). This guarantees a paid deposit still reflects even when the
+ * async Safaricom callback never reaches us AND the client stopped polling
+ * (e.g. the user closed the page). Best-effort and idempotent — safe to call on
+ * every wallet load. No-ops when there are no recent pending M-Pesa deposits.
+ */
+export async function reconcilePendingMpesaDeposits(userId: number): Promise<void> {
+  const sql = db();
+  const pending = (await sql`
+    SELECT provider_ref FROM abetrade_transactions
+    WHERE user_id = ${userId}
+      AND type = 'deposit' AND status = 'pending' AND method = 'mpesa'
+      AND provider_ref IS NOT NULL
+      AND created_at > now() - interval '30 minutes'
+    ORDER BY created_at DESC
+    LIMIT 5
+  `) as Array<{ provider_ref: string }>;
+
+  for (const p of pending) {
+    try {
+      const info = await stkStatus(p.provider_ref);
+      if (info.state === "success") {
+        await creditPendingDeposit(p.provider_ref, { note: "M-Pesa deposit confirmed" });
+      } else if (
+        ["cancelled", "timeout", "insufficient", "wrong_pin", "failed"].includes(info.state)
+      ) {
+        await rejectPendingDeposit(p.provider_ref, info.desc);
+      }
+      // "pending" -> leave it; a later load (or the callback) will settle it.
+    } catch {
+      /* best-effort — never block the wallet */
+    }
+  }
 }
 
 export async function rejectPendingDeposit(

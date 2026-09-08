@@ -6,6 +6,7 @@ import { isTestEmail } from "@/lib/testmode";
 import { getGlobalTest } from "@/lib/settings";
 import { referralStats } from "@/lib/referral";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
+import { reconcilePendingMpesaDeposits } from "@/lib/deposits";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate } from "@/lib/mpesa";
 import { isPaystackConfigured } from "@/lib/paystack";
 import { isCryptoConfigured } from "@/lib/crypto-pay";
@@ -21,11 +22,14 @@ export async function GET() {
   }
   await ensureSchema();
 
-  // Opportunistically settle expired Rise/Fall trades and stopped-out multipliers.
+  // Opportunistically settle expired trades and reconcile any paid-but-not-yet-
+  // credited M-Pesa deposits — so a deposit always reflects even if Safaricom's
+  // callback never arrived. Runs before we read the balance below.
   try {
     await Promise.all([
       settleExpiredTrades(session.id),
       settleStopOuts(session.id),
+      reconcilePendingMpesaDeposits(session.id),
     ]);
   } catch {
     /* non-fatal */
