@@ -191,6 +191,20 @@ export function TradeTerminal() {
       return out;
     });
 
+  // Shade "in the money / out of the money" between entry and live price for
+  // open Rise/Fall & Multiplier positions on this market.
+  const chartZones =
+    feed.last != null
+      ? openTrades
+          .filter((t) => t.symbol === symbol && (t.kind === "rise_fall" || t.kind === "mult"))
+          .map((t) => {
+            const up = t.direction === "rise" || t.direction === "up";
+            const entry = Number(t.entry_price);
+            const cur = feed.last!.price;
+            return { from: entry, to: cur, win: up ? cur >= entry : cur <= entry };
+          })
+      : [];
+
   const showToast = useCallback((msg: string, ok: boolean) => {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
@@ -444,7 +458,7 @@ export function TradeTerminal() {
                 <ChartSkeleton connected={feed.connected} />
               ) : (
                 <div className="h-full">
-                  <PriceChart points={feed.points} up={rising} decimals={dp} markers={chartMarkers} />
+                  <PriceChart points={feed.points} up={rising} decimals={dp} markers={chartMarkers} zones={chartZones} />
                 </div>
               )}
 

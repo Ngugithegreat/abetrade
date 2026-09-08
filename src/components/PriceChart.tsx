@@ -8,6 +8,7 @@ import {
   XAxis,
   CartesianGrid,
   ReferenceLine,
+  ReferenceArea,
   Tooltip,
 } from "recharts";
 import type { Point } from "@/lib/useDerivFeed";
@@ -17,16 +18,20 @@ import { useTheme } from "@/lib/theme";
 const VISIBLE = 90;
 
 export type ChartMarker = { price: number; color: string; label: string };
+// A shaded "in the money / out of the money" band between entry and live price.
+export type ChartZone = { from: number; to: number; win: boolean };
 
 export function PriceChart({
   points,
   up,
   markers = [],
+  zones = [],
   decimals = 2,
 }: {
   points: Point[];
   up: boolean;
   markers?: ChartMarker[];
+  zones?: ChartZone[];
   decimals?: number;
 }) {
   const theme = useTheme();
@@ -141,6 +146,17 @@ export function PriceChart({
             }
             formatter={(v: any) => [fmt(Number(v)), "Price"]}
           />
+          {zones.map((z, i) => (
+            <ReferenceArea
+              key={`zone-${i}`}
+              y1={z.from}
+              y2={z.to}
+              fill={z.win ? "#00E39A" : "#FF4D6D"}
+              fillOpacity={0.14}
+              stroke="none"
+              ifOverflow="extendDomain"
+            />
+          ))}
           {markers.map((mk, i) => (
             <ReferenceLine
               key={`${mk.price}-${i}`}
