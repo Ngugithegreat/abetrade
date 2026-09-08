@@ -53,6 +53,7 @@ export function AdminView() {
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userQuery, setUserQuery] = useState("");
+  const [kycQuery, setKycQuery] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin", { cache: "no-store" });
@@ -197,13 +198,48 @@ export function AdminView() {
       </div>
 
       {/* KYC verifications */}
-      {(data.kyc || []).length > 0 && (
+      {(() => {
+        const kycAll: any[] = data.kyc || [];
+        if (kycAll.length === 0) return null;
+        const kq = kycQuery.trim().toLowerCase();
+        const kycList = kq
+          ? kycAll.filter((k) =>
+              [k.kyc_name, k.name, k.email, k.account_no, k.kyc_id_number, k.kyc_phone]
+                .some((v) => String(v || "").toLowerCase().includes(kq))
+            )
+          : kycAll;
+        return (
         <div className="card overflow-hidden">
-          <div className="border-b border-border px-5 py-3 font-bold">
-            Identity verifications ({data.kyc.length})
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+            <span className="font-bold">
+              Identity verifications ({kq ? `${kycList.length} of ${kycAll.length}` : kycAll.length})
+            </span>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+              <input
+                value={kycQuery}
+                onChange={(e) => setKycQuery(e.target.value)}
+                placeholder="Search name, ID, phone, email…"
+                className="w-full rounded-lg border border-border bg-surface2 py-1.5 pl-8 pr-8 text-xs outline-none focus:border-brand/50 sm:w-64"
+              />
+              {kq && (
+                <button
+                  onClick={() => setKycQuery("")}
+                  title="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-fg"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="divide-y divide-border">
-            {(data.kyc as any[]).map((k) => (
+          <div className="max-h-[560px] divide-y divide-border overflow-auto">
+            {kycList.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-muted">
+                No verifications match “{kycQuery.trim()}”.
+              </div>
+            ) : (
+              kycList.map((k) => (
               <div key={k.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                 <div>
                   <div className="text-sm font-semibold">
@@ -232,10 +268,12 @@ export function AdminView() {
                   </button>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Player management */}
       <div className="card overflow-hidden">

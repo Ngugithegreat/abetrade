@@ -68,7 +68,7 @@ export async function GET() {
       FROM abetrade_users
       WHERE kyc_status = 'pending'
       ORDER BY kyc_submitted_at ASC NULLS LAST
-      LIMIT 50
+      LIMIT 1000
     ` as Promise<any[]>,
     sql`SELECT id, name, email, test_win_pct FROM abetrade_users WHERE is_test = true ORDER BY email` as Promise<any[]>,
   ]);
