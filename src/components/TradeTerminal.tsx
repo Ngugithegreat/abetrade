@@ -131,9 +131,6 @@ export function TradeTerminal() {
   const openTrades = (data?.openTrades ?? []).filter((t) => !!t.is_demo === demo);
   const closed = (data?.closedTrades ?? []).filter((t) => !!t.is_demo === demo);
   const hasOpenMult = openTrades.some((t) => t.kind === "mult");
-  const wins = closed.filter((t) => t.status === "won").length;
-  const settled = closed.filter((t) => t.status !== "open").length;
-  const winRate = settled ? Math.round((wins / settled) * 100) : 0;
 
   // Switching between Real and Demo swaps the whole trade list. Reset the
   // settle trackers so the new account's feedback (sound + result flash +
@@ -423,17 +420,12 @@ export function TradeTerminal() {
       />
       <Onboarding />
       <TradeReceipt trade={receipt} onClose={() => setReceipt(null)} />
-      {/* KPI strip — hidden on phones so the trade controls fit on one screen */}
-      <div className="mb-3 hidden shrink-0 grid-cols-2 gap-2 sm:grid sm:grid-cols-4">
-        <StatChip label="Balance" value={loading ? "—" : money(balance)} accent />
-        <StatChip label="Open positions" value={String(openTrades.length)} />
-        <StatChip label="Win rate" value={settled ? `${winRate}%` : "—"} />
-        <StatChip label="Trades settled" value={String(settled)} />
-      </div>
-
-      <div className="grid min-h-0 flex-1 gap-2 sm:gap-3 lg:grid-cols-[300px_minmax(0,1fr)_360px]">
-        {/* LEFT · Positions (transactions) — drops to the bottom on phones */}
-        <div className="card order-last flex min-h-0 flex-col overflow-hidden max-h-[46vh] lg:order-none lg:max-h-none">
+      {/* Unified workspace — a single high-end surface split into seamless
+          panes (positions · chart · ticket) instead of separate floating
+          columns, so the whole dashboard reads as one page. */}
+      <div className="card flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row lg:divide-x lg:divide-border">
+        {/* Positions — drops to the bottom on phones */}
+        <section className="order-last flex min-h-0 flex-col overflow-hidden border-t border-border max-h-[46vh] lg:order-none lg:w-[290px] lg:shrink-0 lg:border-t-0 lg:max-h-none">
           <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-2">
             {(["open", "closed"] as const).map((t) => (
               <button
@@ -463,10 +455,10 @@ export function TradeTerminal() {
               <ClosedPositions trades={closed} onSelect={setReceipt} />
             )}
           </div>
-        </div>
+        </section>
 
-        {/* MIDDLE · Chart + live digits — shown first on phones */}
-        <div className="card order-first flex h-[36vh] flex-col overflow-hidden lg:order-none lg:h-auto lg:min-h-[0]">
+        {/* Chart + live digits — shown first on phones */}
+        <section className="order-first flex h-[36vh] flex-col overflow-hidden lg:order-none lg:h-auto lg:min-h-0 lg:flex-1">
             <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -570,10 +562,10 @@ export function TradeTerminal() {
                 />
               </div>
             )}
-          </div>
+          </section>
 
-        {/* RIGHT · Ticket */}
-        <div className="card min-h-0 overflow-y-auto p-3 sm:p-3.5">
+        {/* Ticket */}
+        <section className="min-h-0 overflow-y-auto border-t border-border p-3 sm:p-3.5 lg:w-[360px] lg:shrink-0 lg:border-t-0">
             {/* Manual / Auto + AI */}
             <div className="mb-2 flex items-center gap-2 sm:mb-3">
               <div className="flex flex-1 rounded-xl bg-surface2 p-1">
@@ -741,7 +733,7 @@ export function TradeTerminal() {
                 )}
               </p>
             )}
-          </div>
+          </section>
       </div>
 
       {toast && (
@@ -1110,15 +1102,6 @@ function ChartPositions({ trades, livePrice }: { trades: Trade[]; livePrice: num
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function StatChip({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="card px-3.5 py-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-muted">{label}</div>
-      <div className={`tabular mt-0.5 text-lg font-bold ${accent ? "text-brand" : ""}`}>{value}</div>
     </div>
   );
 }
