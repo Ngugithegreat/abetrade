@@ -92,6 +92,7 @@ export function TradeTerminal() {
   const alertPrevRef = useRef<number | null>(null);
   const [receipt, setReceipt] = useState<Trade | null>(null);
   const [botPreset, setBotPreset] = useState<{ side: string; key: number } | null>(null);
+  const [resultFlash, setResultFlash] = useState<{ won: boolean; profit: number; label: string; sub: string; id: number } | null>(null);
   const lastClosedRef = useRef<number | null>(null);
   // Testers default to "auto" so the admin-set win % governs every trade
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
@@ -139,14 +140,37 @@ export function TradeTerminal() {
     }
     if (top.id !== lastClosedRef.current) {
       lastClosedRef.current = top.id;
-      if (top.status === "won") {
-        celebrateWin();
-      } else if (top.status === "lost") {
-        signalLoss();
-      }
+      const won = top.status === "won";
+      const stake = Number(top.stake);
+      const profit = won ? Number(top.payout) - stake : -stake;
+      const dir =
+        top.kind === "mult"
+          ? `${top.direction === "up" ? "UP" : "DOWN"} ×${top.multiplier}`
+          : top.kind === "digit"
+          ? top.direction.toUpperCase()
+          : top.direction === "rise"
+          ? "RISE"
+          : "FALL";
+      // Flash the result on the chart before it drops into history.
+      setResultFlash({
+        won,
+        profit,
+        label: won ? "Trade won" : "Trade lost",
+        sub: `${marketBySymbol(top.symbol)?.short ?? top.symbol} · ${dir}`,
+        id: top.id,
+      });
+      if (won) celebrateWin();
+      else signalLoss();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closed]);
+
+  // Clear the on-chart result flash after a few seconds.
+  useEffect(() => {
+    if (!resultFlash) return;
+    const t = setTimeout(() => setResultFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [resultFlash]);
 
   // Draw open Rise/Fall & Multiplier positions on the chart (entry + stop-out lines).
   const chartMarkers = openTrades
@@ -421,6 +445,27 @@ export function TradeTerminal() {
               ) : (
                 <div className="h-full">
                   <PriceChart points={feed.points} up={rising} decimals={dp} markers={chartMarkers} />
+                </div>
+              )}
+
+              {/* Live open positions on THIS market — shown right on the chart */}
+              <ChartPositions trades={openTrades.filter((t) => t.symbol === symbol)} livePrice={feed.last?.price ?? null} />
+
+              {/* Result flash — the win/loss reveal before it drops to history */}
+              {resultFlash && (
+                <div className="pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-center">
+                  <div
+                    className={`animate-fade-up rounded-2xl border px-6 py-3 text-center shadow-card backdrop-blur ${
+                      resultFlash.won ? "border-up/50 bg-up/15" : "border-down/50 bg-down/15"
+                    }`}
+                  >
+                    <div className={`tabular text-3xl font-black ${resultFlash.won ? "text-up" : "text-down"}`}>
+                      {money(resultFlash.profit, { sign: true })}
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                      {resultFlash.label} · {resultFlash.sub}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -925,6 +970,63 @@ function MarketDropdown({ symbol, onSelect }: { symbol: string; onSelect: (s: st
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Compact live open-position badges drawn over the chart, so the trade you just
+// placed is visible playing out (countdown / live P&L) right on the price.
+function ChartPositions({ trades, livePrice }: { trades: Trade[]; livePrice: number | null }) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    if (!trades.length) return;
+    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 500);
+    return () => clearInterval(id);
+  }, [trades.length]);
+  if (!trades.length) return null;
+
+  return (
+    <div className="pointer-events-none absolute left-2 top-2 z-10 flex flex-col gap-1.5">
+      {trades.slice(0, 3).map((t) => {
+        const up = ["rise", "up", "even", "over", "matches"].includes(t.direction);
+        const label =
+          t.kind === "mult"
+            ? `${up ? "UP" : "DOWN"} ×${t.multiplier}`
+            : t.kind === "digit"
+            ? `${t.direction.toUpperCase()}${t.subtype !== "even_odd" ? " " + t.barrier : ""}`
+            : up
+            ? "RISE"
+            : "FALL";
+        let right: React.ReactNode;
+        if (t.kind === "mult") {
+          const pnl =
+            livePrice != null
+              ? multiplierPnl({
+                  direction: t.direction as "up" | "down",
+                  entry: Number(t.entry_price),
+                  current: livePrice,
+                  stakeCents: Number(t.stake),
+                  multiplier: Number(t.multiplier),
+                })
+              : null;
+          right = (
+            <span className={`tabular font-bold ${pnl == null ? "text-muted" : pnl >= 0 ? "text-up" : "text-down"}`}>
+              {pnl == null ? "—" : money(pnl, { sign: true })}
+            </span>
+          );
+        } else {
+          const secs = Math.max(0, Number(t.expiry_epoch) - now);
+          right = secs <= 0 ? <span className="font-semibold text-gold">settling…</span> : <span className="tabular font-bold">{secs}s</span>;
+        }
+        return (
+          <div key={t.id} className="flex items-center gap-2 rounded-lg border border-border bg-bg/80 px-2.5 py-1 text-[11px] shadow-card backdrop-blur">
+            <span className={`h-1.5 w-1.5 animate-pulse rounded-full ${up ? "bg-up" : "bg-down"}`} />
+            <span className={`font-bold ${up ? "text-up" : "text-down"}`}>{label}</span>
+            <span className="text-muted">{money(Number(t.stake))}</span>
+            {right}
+          </div>
+        );
+      })}
     </div>
   );
 }

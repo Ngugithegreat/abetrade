@@ -74,6 +74,7 @@ export function BotPanel({
   const [running, setRunning] = useState(false);
   const [stats, setStats] = useState<Stats>({ runs: 0, wins: 0, losses: 0, pnlCents: 0, stakeCents: baseStakeCents });
   const [log, setLog] = useState<RunLog[]>([]);
+  const [botAlert, setBotAlert] = useState<{ kind: "tp" | "sl"; amount: number; pnl: number } | null>(null);
   const stopRef = useRef(false);
 
   // Keep the bot side valid when the contract / subtype changes.
@@ -190,7 +191,10 @@ export function BotPanel({
 
     stopRef.current = false;
     setRunning(false);
-    showToast(`${reason} · P&L ${money(pnl, { sign: true })}`, pnl >= 0);
+    // Pop an alert when a target / stop was hit; toast for other stops.
+    if (reason.includes("Target profit")) setBotAlert({ kind: "tp", amount: tpCents, pnl });
+    else if (reason.includes("Stop loss")) setBotAlert({ kind: "sl", amount: slCents, pnl });
+    else showToast(`${reason} · P&L ${money(pnl, { sign: true })}`, pnl >= 0);
   }
 
   function stop() {
@@ -200,6 +204,42 @@ export function BotPanel({
 
   return (
     <div className="mt-3 space-y-3">
+      {/* Target / stop alert popup */}
+      {botAlert && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setBotAlert(null)} />
+          <div
+            className={`relative w-full max-w-xs rounded-2xl border bg-surface p-6 text-center shadow-glow ${
+              botAlert.kind === "tp" ? "border-up/40" : "border-down/40"
+            }`}
+          >
+            <div
+              className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${
+                botAlert.kind === "tp" ? "bg-up/15 text-up" : "bg-down/15 text-down"
+              }`}
+            >
+              {botAlert.kind === "tp" ? <Target className="h-7 w-7" /> : <ShieldAlert className="h-7 w-7" />}
+            </div>
+            <div className="mt-3 text-lg font-bold">
+              {botAlert.kind === "tp" ? "Target profit reached 🎯" : "Stop loss reached 🛑"}
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Your {botAlert.kind === "tp" ? "target profit" : "stop loss"} of{" "}
+              <b className="text-fg">{money(botAlert.amount)}</b> was hit, so the bot stopped.
+            </p>
+            <div className="mt-3 rounded-xl border border-border bg-surface2/60 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-muted">Session P&amp;L</div>
+              <div className={`tabular text-xl font-black ${botAlert.pnl >= 0 ? "text-up" : "text-down"}`}>
+                {money(botAlert.pnl, { sign: true })}
+              </div>
+            </div>
+            <button onClick={() => setBotAlert(null)} className="btn btn-brand mt-4 w-full py-2.5 text-sm">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Side the bot trades */}
       <div>
         <label className="mb-1 block text-xs font-medium text-muted">Bot trades</label>
