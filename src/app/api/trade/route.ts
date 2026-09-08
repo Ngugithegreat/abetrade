@@ -42,6 +42,9 @@ export async function POST(req: Request) {
   const symbol = String(body.symbol || "");
   const direction = String(body.direction || "");
   const stake = Math.round(Number(body.stake));
+  // Demo (practice) trade — settled against the real market with virtual funds,
+  // never real money and never the test-mode manipulation.
+  const demo = body.demo === true;
 
   const market = marketBySymbol(symbol);
   if (!market) {
@@ -121,7 +124,7 @@ export async function POST(req: Request) {
   // Test harness: honour a forced win/lose ONLY for whitelisted TEST_EMAILS
   // accounts and only for time-settled contracts. Never trusts the client flag.
   let forcedOutcome: string | null = null;
-  if (kind === "rise_fall" || kind === "digit" || kind === "mult") {
+  if (!demo && (kind === "rise_fall" || kind === "digit" || kind === "mult")) {
     const globalTest = await getGlobalTest();
     if (globalTest || body.testMode) {
       // A whitelisted account always uses ITS OWN win % (even in global mode);
@@ -186,14 +189,25 @@ export async function POST(req: Request) {
     }
   }
 
-  const debit = (await sql`
-    UPDATE abetrade_users SET balance = balance - ${stake}
-    WHERE id = ${session.id} AND balance >= ${stake}
-    RETURNING balance
-  `) as Array<{ balance: string | number }>;
+  const debit = (
+    demo
+      ? await sql`
+          UPDATE abetrade_users SET demo_balance = demo_balance - ${stake}
+          WHERE id = ${session.id} AND demo_balance >= ${stake}
+          RETURNING demo_balance AS balance
+        `
+      : await sql`
+          UPDATE abetrade_users SET balance = balance - ${stake}
+          WHERE id = ${session.id} AND balance >= ${stake}
+          RETURNING balance
+        `
+  ) as Array<{ balance: string | number }>;
 
   if (!debit.length) {
-    return NextResponse.json({ error: "Insufficient balance." }, { status: 402 });
+    return NextResponse.json(
+      { error: demo ? "Not enough demo funds — reset your demo balance in the Wallet." : "Insufficient balance." },
+      { status: 402 }
+    );
   }
   const newBalance = Number(debit[0].balance);
 
@@ -205,10 +219,10 @@ export async function POST(req: Request) {
     const expiry = entry.epoch + duration;
     rows = (await sql`
       INSERT INTO abetrade_trades
-        (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status, forced_outcome)
+        (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch, expiry_epoch, status, forced_outcome, is_demo)
       VALUES
         (${session.id}, 'rise_fall', ${symbol}, ${direction}, ${stake}, ${payout},
-         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${forcedOutcome})
+         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${forcedOutcome}, ${demo})
       RETURNING *
     `) as any[];
   } else if (kind === "mult") {
@@ -216,10 +230,10 @@ export async function POST(req: Request) {
     rows = (await sql`
       INSERT INTO abetrade_trades
         (user_id, kind, symbol, direction, stake, payout, multiplier, entry_price,
-         entry_epoch, expiry_epoch, stop_out_price, status, forced_outcome)
+         entry_epoch, expiry_epoch, stop_out_price, status, forced_outcome, is_demo)
       VALUES
         (${session.id}, 'mult', ${symbol}, ${direction}, ${stake}, 0, ${multiplier},
-         ${entry.price}, ${entry.epoch}, 0, ${so}, 'open', ${forcedOutcome})
+         ${entry.price}, ${entry.epoch}, 0, ${so}, 'open', ${forcedOutcome}, ${demo})
       RETURNING *
     `) as any[];
   } else {
@@ -228,19 +242,19 @@ export async function POST(req: Request) {
     rows = (await sql`
       INSERT INTO abetrade_trades
         (user_id, kind, symbol, direction, stake, payout, entry_price, entry_epoch,
-         expiry_epoch, status, subtype, prediction, barrier, forced_outcome)
+         expiry_epoch, status, subtype, prediction, barrier, forced_outcome, is_demo)
       VALUES
         (${session.id}, 'digit', ${symbol}, ${direction}, ${stake}, ${payout},
-         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${subtype}, ${direction}, ${barrier}, ${forcedOutcome})
+         ${entry.price}, ${entry.epoch}, ${expiry}, 'open', ${subtype}, ${direction}, ${barrier}, ${forcedOutcome}, ${demo})
       RETURNING *
     `) as any[];
   }
 
   await sql`
-    INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
+    INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note, is_demo)
     VALUES (${session.id}, 'trade_stake', ${-stake}, 'completed', 'trade', ${
       symbol + " " + direction
-    })
+    }, ${demo})
   `;
 
   return NextResponse.json({ ok: true, trade: rows[0], balance: newBalance });

@@ -17,9 +17,10 @@ const FILTERS: [TradeFilter, string][] = [
 ];
 
 export function HistoryView() {
-  const { data } = useApp();
-  const trades = data?.closedTrades ?? [];
-  const txns = data?.transactions ?? [];
+  const { data, demo } = useApp();
+  // History is scoped to the active account (real vs demo).
+  const trades = (data?.closedTrades ?? []).filter((t) => !!t.is_demo === demo);
+  const txns = (data?.transactions ?? []).filter((t) => !!t.is_demo === demo);
 
   const [tab, setTab] = useState<Tab>("trades");
   const [filter, setFilter] = useState<TradeFilter>("all");

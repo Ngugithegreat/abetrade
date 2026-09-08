@@ -9,6 +9,8 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
+export type AccountMode = "real" | "demo";
+
 export type Txn = {
   id: number;
   type: string;
@@ -18,6 +20,7 @@ export type Txn = {
   reference: string | null;
   note: string | null;
   created_at: string;
+  is_demo?: boolean;
 };
 
 export type Trade = {
@@ -40,6 +43,7 @@ export type Trade = {
   status: "open" | "won" | "lost";
   created_at: string;
   settled_at: string | null;
+  is_demo?: boolean;
 };
 
 export type AppUser = {
@@ -48,6 +52,7 @@ export type AppUser = {
   email: string;
   role: "user" | "admin";
   balance: number;
+  demo_balance?: number;
   country: string | null;
   phone?: string | null;
   account_no?: string;
@@ -87,11 +92,18 @@ type WalletData = {
 
 type Ctx = {
   user: AppUser | null;
+  /** The balance of the ACTIVE account (real or demo, per `mode`). */
   balance: number;
+  realBalance: number;
+  demoBalance: number;
+  mode: AccountMode;
+  demo: boolean;
+  setMode: (m: AccountMode) => void;
   data: WalletData | null;
   config: AppConfig | null;
   loading: boolean;
   refresh: () => Promise<void>;
+  /** Updates the ACTIVE account's balance. */
   setBalance: (b: number) => void;
   logout: () => Promise<void>;
 };
@@ -102,8 +114,29 @@ export type AppCtxValue = Ctx;
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [data, setData] = useState<WalletData | null>(null);
-  const [balance, setBalance] = useState(0);
+  const [realBalance, setRealBalance] = useState(0);
+  const [demoBalance, setDemoBalance] = useState(0);
+  const [mode, setModeState] = useState<AccountMode>("real");
   const [loading, setLoading] = useState(true);
+
+  // Restore the last-used account (real/demo) on this device.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("st_mode");
+      if (saved === "demo" || saved === "real") setModeState(saved);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const setMode = useCallback((m: AccountMode) => {
+    setModeState(m);
+    try {
+      localStorage.setItem("st_mode", m);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -114,13 +147,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       const json = await res.json();
       setData(json);
-      if (json.user) setBalance(json.user.balance);
+      if (json.user) {
+        setRealBalance(Number(json.user.balance ?? 0));
+        setDemoBalance(Number(json.user.demo_balance ?? 0));
+      }
     } catch {
       /* ignore transient errors */
     } finally {
       setLoading(false);
     }
   }, [router]);
+
+  // Update the active account's balance (used for instant UI after a trade).
+  const setBalance = useCallback(
+    (b: number) => (mode === "demo" ? setDemoBalance(b) : setRealBalance(b)),
+    [mode]
+  );
 
   const logout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -131,11 +173,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     refresh();
   }, [refresh]);
 
+  const balance = mode === "demo" ? demoBalance : realBalance;
+
   return (
     <AppCtx.Provider
       value={{
         user: data?.user ?? null,
         balance,
+        realBalance,
+        demoBalance,
+        mode,
+        demo: mode === "demo",
+        setMode,
         data,
         config: data?.config ?? null,
         loading,

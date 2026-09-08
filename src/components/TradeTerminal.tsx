@@ -71,7 +71,7 @@ function beep() {
 }
 
 export function TradeTerminal() {
-  const { balance, setBalance, data, refresh, loading, user, config } = useApp();
+  const { balance, setBalance, data, refresh, loading, user, config, demo } = useApp();
   const [symbol, setSymbol] = useState("1HZ100V");
   const [contract, setContract] = useState<Contract>("digit");
   const [stake, setStake] = useState("10");
@@ -91,7 +91,9 @@ export function TradeTerminal() {
   // automatically (incl. Rise/Fall) — Real/Win/Lose are per-trade overrides.
 
   // Sim market when this account is a tester OR the whole system is in test mode.
-  const sim = !!user?.isTest || !!config?.globalTest;
+  // Demo trades always run on the REAL live market (authentic practice); the
+  // test-mode simulation only ever applies to a real account.
+  const sim = !demo && (!!user?.isTest || !!config?.globalTest);
   const realFeed = useDerivFeed(symbol, !sim);
   const testFeed = useTestFeed(symbol, sim);
   const feed = sim ? testFeed : realFeed;
@@ -112,8 +114,9 @@ export function TradeTerminal() {
   const stakeValid =
     stakeCents >= MIN_STAKE && stakeCents <= MAX_STAKE && stakeCents <= balance;
 
-  const openTrades = data?.openTrades ?? [];
-  const closed = data?.closedTrades ?? [];
+  // Show only the ACTIVE account's positions (real vs demo).
+  const openTrades = (data?.openTrades ?? []).filter((t) => !!t.is_demo === demo);
+  const closed = (data?.closedTrades ?? []).filter((t) => !!t.is_demo === demo);
   const hasOpenMult = openTrades.some((t) => t.kind === "mult");
   const wins = closed.filter((t) => t.status === "won").length;
   const settled = closed.filter((t) => t.status !== "open").length;
@@ -239,6 +242,8 @@ export function TradeTerminal() {
         body.testMode = true;
         if (feed.last) body.entry = { price: feed.last.price, epoch: feed.last.epoch };
       }
+      // Practice trade on the real market with virtual funds.
+      if (demo) body.demo = true;
       const res = await fetch("/api/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

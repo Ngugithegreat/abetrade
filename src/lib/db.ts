@@ -94,6 +94,11 @@ export async function ensureSchema(): Promise<void> {
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS country TEXT`;
   // Phone captured at signup, prefilled on the deposit/withdraw forms.
   await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS phone TEXT`;
+  // Demo (practice) account — virtual funds, real market, never real money.
+  // Default $10,000.00 (in cents). Resettable by the user.
+  await sql`ALTER TABLE abetrade_users ADD COLUMN IF NOT EXISTS demo_balance BIGINT NOT NULL DEFAULT 1000000`;
+  await sql`ALTER TABLE abetrade_trades ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false`;
+  await sql`ALTER TABLE abetrade_transactions ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false`;
 
   // Provider correlation columns for automated M-Pesa (added idempotently so
   // existing databases upgrade cleanly).

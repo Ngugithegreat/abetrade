@@ -10,9 +10,13 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   Gift,
+  ChevronDown,
+  Check,
+  BadgeCheck,
+  FlaskConical,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useApp } from "./app-context";
+import { useEffect, useRef, useState } from "react";
+import { useApp, AccountMode } from "./app-context";
 import { money } from "@/lib/format";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
@@ -59,9 +63,124 @@ function DepositWithdrawButton({ className = "" }: { className?: string }) {
   );
 }
 
+/**
+ * Real ⇄ Demo account switcher — like the big brokers. Shows the active
+ * account and its balance; the dropdown lists both with their balances.
+ */
+function AccountSwitcher() {
+  const { mode, setMode, realBalance, demoBalance, loading, refresh } = useApp();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const demo = mode === "demo";
+
+  function choose(m: AccountMode) {
+    if (m !== mode) {
+      setMode(m);
+      refresh();
+    }
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 rounded-xl border px-2.5 py-1.5 transition ${
+          demo ? "border-gold/50 bg-gold/10" : "border-border bg-surface2/60 hover:border-brand/40"
+        }`}
+      >
+        <span className="flex flex-col items-start leading-none">
+          <span className={`text-[9px] font-bold uppercase tracking-wider ${demo ? "text-gold" : "text-up"}`}>
+            {demo ? "Demo" : "Real"}
+          </span>
+          <span className={`tabular mt-0.5 text-sm font-bold ${demo ? "text-gold" : "text-brand"}`}>
+            {loading ? "—" : money(demo ? demoBalance : realBalance)}
+          </span>
+        </span>
+        <ChevronDown className={`h-3.5 w-3.5 text-muted transition ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-border bg-surface shadow-card">
+          <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+            Switch account
+          </div>
+          <AccountRow
+            active={!demo}
+            icon={BadgeCheck}
+            label="Real account"
+            sub="Your live funds"
+            amount={money(realBalance)}
+            accent="text-brand"
+            onClick={() => choose("real")}
+          />
+          <AccountRow
+            active={demo}
+            icon={FlaskConical}
+            label="Demo account"
+            sub="Practice · virtual funds"
+            amount={money(demoBalance)}
+            accent="text-gold"
+            onClick={() => choose("demo")}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AccountRow({
+  active,
+  icon: Icon,
+  label,
+  sub,
+  amount,
+  accent,
+  onClick,
+}: {
+  active: boolean;
+  icon: any;
+  label: string;
+  sub: string;
+  amount: string;
+  accent: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-surface2 ${
+        active ? "bg-surface2/60" : ""
+      }`}
+    >
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface2 ${accent}`}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5 text-sm font-semibold">
+          {label}
+          {active && <Check className="h-3.5 w-3.5 text-up" />}
+        </span>
+        <span className="block text-[11px] text-muted">{sub}</span>
+      </span>
+      <span className={`tabular text-sm font-bold ${accent}`}>{amount}</span>
+    </button>
+  );
+}
+
 export function Nav() {
   const pathname = usePathname();
-  const { balance, logout, loading, user } = useApp();
+  const { logout, user, demo } = useApp();
 
   // Auto-hide the mobile bottom bar: tuck it away while scrolling down through
   // content, slide it back the moment the user scrolls up (or nears the top).
@@ -131,19 +250,11 @@ export function Nav() {
               </div>
             )}
 
-            {/* Balance — compact pill that opens the wallet */}
-            <Link
-              href="/wallet"
-              className="flex flex-col rounded-xl border border-border bg-surface2/60 px-3 py-1.5 leading-none transition hover:border-brand/40"
-            >
-              <span className="text-[9px] uppercase tracking-wider text-muted">Balance</span>
-              <span className="tabular mt-0.5 text-sm font-bold text-brand">
-                {loading ? "—" : money(balance)}
-              </span>
-            </Link>
+            {/* Real ⇄ Demo account switcher + active balance */}
+            <AccountSwitcher />
 
-            {/* Sliding Deposit / Withdraw action */}
-            <DepositWithdrawButton />
+            {/* Sliding Deposit / Withdraw action (real account only) */}
+            {!demo && <DepositWithdrawButton />}
 
             <ThemeToggle />
             <button

@@ -19,6 +19,8 @@ import {
   Check,
   ShieldCheck,
   ShieldAlert,
+  FlaskConical,
+  RotateCcw,
 } from "lucide-react";
 import { useApp, Txn, AppUser } from "./app-context";
 import { money, shortTime } from "@/lib/format";
@@ -47,7 +49,7 @@ function withdrawMethods(country: string | null | undefined): string[] {
 }
 
 export function WalletView() {
-  const { user, balance, data, config, refresh, setBalance, loading } = useApp();
+  const { user, balance, data, config, refresh, setBalance, loading, demo } = useApp();
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const rate = config?.usdKesRate ?? 130;
   const country = user?.country ?? null;
@@ -85,16 +87,23 @@ export function WalletView() {
   return (
     <div className="space-y-5">
       {/* Balance banner */}
-      <div className="card relative overflow-hidden p-6">
-        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand/20 blur-3xl" />
-        <div className="text-xs uppercase tracking-wider text-muted">
-          Available balance
+      <div className={`card relative overflow-hidden p-6 ${demo ? "border-gold/40" : ""}`}>
+        <div className={`pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full blur-3xl ${demo ? "bg-gold/20" : "bg-brand/20"}`} />
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted">
+          {demo ? "Demo balance" : "Available balance"}
+          {demo && (
+            <span className="rounded-md bg-gold/15 px-1.5 py-0.5 text-[10px] font-bold text-gold">
+              PRACTICE
+            </span>
+          )}
         </div>
-        <div className="tabular mt-1 text-4xl font-black text-fg">
+        <div className={`tabular mt-1 text-4xl font-black ${demo ? "text-gold" : "text-fg"}`}>
           {loading ? "—" : money(balance)}
         </div>
         <div className="mt-1 text-xs text-muted">
-          Funds are held securely and settle to your withdrawals on request.
+          {demo
+            ? "Virtual funds for practice on the live market — not real money."
+            : "Funds are held securely and settle to your withdrawals on request."}
         </div>
       </div>
 
@@ -111,65 +120,125 @@ export function WalletView() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
-        {/* Money form */}
-        <div className="card p-5">
-          <div className="mb-4 grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setTab("deposit")}
-              className={`btn py-2 ${tab === "deposit" ? "btn-brand" : "btn-ghost"}`}
-            >
-              <ArrowDownToLine className="h-4 w-4" /> Deposit
-            </button>
-            <button
-              onClick={() => setTab("withdraw")}
-              className={`btn py-2 ${tab === "withdraw" ? "btn-brand" : "btn-ghost"}`}
-            >
-              <ArrowUpFromLine className="h-4 w-4" /> Withdraw
-            </button>
+        {/* Money form (real) / Demo panel */}
+        {demo ? (
+          <DemoPanel onDone={(bal) => setBalance(bal)} refresh={refresh} />
+        ) : (
+          <div className="card p-5">
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setTab("deposit")}
+                className={`btn py-2 ${tab === "deposit" ? "btn-brand" : "btn-ghost"}`}
+              >
+                <ArrowDownToLine className="h-4 w-4" /> Deposit
+              </button>
+              <button
+                onClick={() => setTab("withdraw")}
+                className={`btn py-2 ${tab === "withdraw" ? "btn-brand" : "btn-ghost"}`}
+              >
+                <ArrowUpFromLine className="h-4 w-4" /> Withdraw
+              </button>
+            </div>
+            {tab === "deposit" ? (
+              <MoneyForm
+                kind="deposit"
+                max={Infinity}
+                rate={rate}
+                methodIds={depositMethods(country)}
+                mpesaAutomated={!!config?.mpesaDeposit}
+                defaultPhone={user?.phone ?? null}
+                config={config}
+                refresh={refresh}
+                onDone={(newBal) => {
+                  if (newBal != null) setBalance(newBal);
+                  refresh();
+                }}
+              />
+            ) : (
+              <MoneyForm
+                kind="withdraw"
+                max={balance}
+                rate={rate}
+                methodIds={withdrawMethods(country)}
+                mpesaAutomated={!!config?.mpesaWithdraw}
+                defaultPhone={user?.phone ?? null}
+                config={config}
+                refresh={refresh}
+                onDone={(newBal) => {
+                  if (newBal != null) setBalance(newBal);
+                  refresh();
+                }}
+              />
+            )}
           </div>
-          {tab === "deposit" ? (
-            <MoneyForm
-              kind="deposit"
-              max={Infinity}
-              rate={rate}
-              methodIds={depositMethods(country)}
-              mpesaAutomated={!!config?.mpesaDeposit}
-              defaultPhone={user?.phone ?? null}
-              config={config}
-              refresh={refresh}
-              onDone={(newBal) => {
-                if (newBal != null) setBalance(newBal);
-                refresh();
-              }}
-            />
-          ) : (
-            <MoneyForm
-              kind="withdraw"
-              max={balance}
-              rate={rate}
-              methodIds={withdrawMethods(country)}
-              mpesaAutomated={!!config?.mpesaWithdraw}
-              defaultPhone={user?.phone ?? null}
-              config={config}
-              refresh={refresh}
-              onDone={(newBal) => {
-                if (newBal != null) setBalance(newBal);
-                refresh();
-              }}
-            />
-          )}
-        </div>
+        )}
 
-        {/* Transactions */}
+        {/* Transactions — scoped to the active account */}
         <div className="card overflow-hidden">
           <div className="border-b border-border px-5 py-3 font-bold">
             Recent activity
           </div>
-          {loading && !data ? <ListSkeleton rows={5} /> : <TxnList txns={data?.transactions ?? []} />}
+          {loading && !data ? (
+            <ListSkeleton rows={5} />
+          ) : (
+            <TxnList txns={(data?.transactions ?? []).filter((t) => !!t.is_demo === demo)} />
+          )}
         </div>
       </div>
 
-      {user && <KycCard user={user} refresh={refresh} />}
+      {!demo && user && <KycCard user={user} refresh={refresh} />}
+    </div>
+  );
+}
+
+function DemoPanel({
+  onDone,
+  refresh,
+}: {
+  onDone: (balance: number) => void;
+  refresh: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function reset() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/demo/reset", { method: "POST" });
+      const j = await res.json();
+      if (res.ok && typeof j.demoBalance === "number") {
+        onDone(j.demoBalance);
+        setMsg("Demo balance reset to $10,000.00.");
+        await refresh();
+      } else {
+        setMsg(j.error || "Could not reset. Try again.");
+      }
+    } catch {
+      setMsg("Network error. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 text-sm font-bold">
+        <FlaskConical className="h-4 w-4 text-gold" /> Demo account
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-muted">
+        You’re practising with <b className="text-gold">virtual funds</b> on the same live market
+        as real trading. Nothing here is real money — a great way to learn the platform and test
+        strategies risk-free. Switch back to <b>Real</b> in the top bar anytime.
+      </p>
+      <button
+        onClick={reset}
+        disabled={busy}
+        className="btn btn-ghost mt-4 w-full border border-gold/40 py-2.5 text-sm text-gold"
+      >
+        <RotateCcw className="h-4 w-4" /> {busy ? "Resetting…" : "Reset demo balance to $10,000"}
+      </button>
+      {msg && <p className="mt-2 text-center text-xs text-muted">{msg}</p>}
     </div>
   );
 }

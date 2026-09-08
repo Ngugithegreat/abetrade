@@ -26,15 +26,15 @@ export async function GET() {
       SELECT
         (SELECT COUNT(*) FROM abetrade_users) AS user_count,
         (SELECT COALESCE(SUM(balance),0) FROM abetrade_users) AS total_balance,
-        (SELECT COUNT(*) FROM abetrade_trades) AS trade_count,
-        (SELECT COUNT(*) FROM abetrade_trades WHERE status = 'won') AS won_count,
-        (SELECT COUNT(*) FROM abetrade_trades WHERE status = 'lost') AS lost_count,
+        (SELECT COUNT(*) FROM abetrade_trades WHERE is_demo = false) AS trade_count,
+        (SELECT COUNT(*) FROM abetrade_trades WHERE status = 'won' AND is_demo = false) AS won_count,
+        (SELECT COUNT(*) FROM abetrade_trades WHERE status = 'lost' AND is_demo = false) AS lost_count,
         (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='deposit' AND status='completed') AS deposits_total,
         (SELECT COALESCE(SUM(-amount),0) FROM abetrade_transactions WHERE type='withdrawal' AND status='completed') AS withdrawals_total,
         (SELECT COUNT(*) FROM abetrade_transactions WHERE type='deposit' AND status='pending') AS deposits_pending,
         (SELECT COUNT(*) FROM abetrade_transactions WHERE type='withdrawal' AND status='pending') AS withdrawals_pending,
-        (SELECT COALESCE(SUM(-amount),0) FROM abetrade_transactions WHERE type='trade_stake') AS staked_total,
-        (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='trade_payout') AS payout_total,
+        (SELECT COALESCE(SUM(-amount),0) FROM abetrade_transactions WHERE type='trade_stake' AND is_demo = false) AS staked_total,
+        (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='trade_payout' AND is_demo = false) AS payout_total,
         (SELECT COALESCE(SUM(amount),0) FROM abetrade_transactions WHERE type='bonus' AND amount > 0) AS bonus_issued,
         (SELECT COALESCE(SUM(bonus_locked),0) FROM abetrade_users) AS bonus_locked
     ` as Promise<any[]>,
@@ -42,7 +42,7 @@ export async function GET() {
       SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
              COALESCE(SUM(-amount),0) AS volume
       FROM abetrade_transactions
-      WHERE type='trade_stake' AND created_at > now() - interval '14 days'
+      WHERE type='trade_stake' AND is_demo = false AND created_at > now() - interval '14 days'
       GROUP BY 1 ORDER BY 1
     ` as Promise<any[]>,
     sql`
@@ -58,7 +58,7 @@ export async function GET() {
                    WHERE x.user_id = u.id AND x.type='deposit' AND x.status='completed' AND x.method IS NOT NULL
                    ORDER BY x.created_at DESC LIMIT 1) AS deposit_method
       FROM abetrade_users u
-      LEFT JOIN abetrade_trades t ON t.user_id = u.id
+      LEFT JOIN abetrade_trades t ON t.user_id = u.id AND t.is_demo = false
       GROUP BY u.id
       ORDER BY u.created_at DESC
       LIMIT 5000

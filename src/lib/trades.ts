@@ -28,6 +28,7 @@ export type TradeRow = {
   barrier: number | null;
   exit_digit: number | null;
   forced_outcome: string | null;
+  is_demo: boolean;
   status: "open" | "won" | "lost";
   created_at: string;
   settled_at: string | null;
@@ -110,12 +111,16 @@ export async function settleTrade(trade: TradeRow): Promise<TradeRow> {
 
   if (won) {
     const payout = Number(trade.payout);
-    await sql`UPDATE abetrade_users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
+    if (trade.is_demo) {
+      await sql`UPDATE abetrade_users SET demo_balance = demo_balance + ${payout} WHERE id = ${trade.user_id}`;
+    } else {
+      await sql`UPDATE abetrade_users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
+    }
     await sql`
-      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
+      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note, is_demo)
       VALUES (${trade.user_id}, 'trade_payout', ${payout}, 'completed', 'trade', ${
         "Won " + trade.symbol + " " + trade.direction
-      })
+      }, ${trade.is_demo})
     `;
   }
 
@@ -196,12 +201,16 @@ export async function closeMultiplier(
   }
 
   if (payout > 0) {
-    await sql`UPDATE abetrade_users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
+    if (trade.is_demo) {
+      await sql`UPDATE abetrade_users SET demo_balance = demo_balance + ${payout} WHERE id = ${trade.user_id}`;
+    } else {
+      await sql`UPDATE abetrade_users SET balance = balance + ${payout} WHERE id = ${trade.user_id}`;
+    }
     await sql`
-      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note)
+      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, note, is_demo)
       VALUES (${trade.user_id}, 'trade_payout', ${payout}, 'completed', 'trade', ${
         "Closed " + trade.symbol + " " + trade.direction + " x" + trade.multiplier
-      })
+      }, ${trade.is_demo})
     `;
   }
 
