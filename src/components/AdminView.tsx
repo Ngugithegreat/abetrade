@@ -276,6 +276,9 @@ export function AdminView() {
         );
       })()}
 
+      {/* Withdrawals — who cashed out, how much, and their deposit/withdraw totals */}
+      <WithdrawalsCard items={data.withdrawals || []} />
+
       {/* Player management */}
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
@@ -429,6 +432,103 @@ function PlayerRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+type Withdrawal = {
+  id: number;
+  name: string;
+  account_no: string;
+  amount: number;
+  status: string;
+  method: string | null;
+  reference: string | null;
+  receipt: string | null;
+  created_at: string;
+  userDeposited: number;
+  userWithdrawn: number;
+};
+
+function WdStatus({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    completed: { label: "Paid", cls: "bg-up/15 text-up" },
+    pending: { label: "Processing", cls: "bg-gold/15 text-gold" },
+    rejected: { label: "Refunded", cls: "bg-down/15 text-down" },
+  };
+  const s = map[status] || { label: status, cls: "bg-surface2 text-muted" };
+  return <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase ${s.cls}`}>{s.label}</span>;
+}
+
+function WithdrawalsCard({ items }: { items: Withdrawal[] }) {
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const list = query
+    ? items.filter(
+        (w) =>
+          (w.name || "").toLowerCase().includes(query) ||
+          (w.account_no || "").toLowerCase().includes(query) ||
+          (w.reference || "").toLowerCase().includes(query)
+      )
+    : items;
+  const paidTotal = items.filter((w) => w.status === "completed").reduce((s, w) => s + w.amount, 0);
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+        <span className="font-bold">
+          Withdrawals ({query ? `${list.length} of ${items.length}` : items.length})
+        </span>
+        <span className="text-[11px] text-muted">
+          Paid out: <span className="tabular font-semibold text-gold">{money(paidTotal)}</span>
+        </span>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search name, account or phone…"
+            className="w-full rounded-lg border border-border bg-surface2 py-1.5 pl-8 pr-8 text-xs outline-none focus:border-brand/50 sm:w-60"
+          />
+          {query && (
+            <button onClick={() => setQ("")} title="Clear" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-fg">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+      {items.length === 0 ? (
+        <div className="px-5 py-8 text-center text-sm text-muted">No withdrawals yet.</div>
+      ) : (
+        <div className="max-h-[440px] divide-y divide-border overflow-auto">
+          {list.length === 0 ? (
+            <div className="px-5 py-8 text-center text-sm text-muted">No withdrawals match “{q.trim()}”.</div>
+          ) : (
+            list.map((w) => (
+              <div key={w.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">
+                    {w.name} <span className="text-[11px] text-muted">({w.account_no})</span>
+                  </div>
+                  <div className="tabular text-[11px] text-muted">
+                    {(w.method && (METHOD_LABELS[w.method] || w.method)) || "—"}
+                    {w.reference ? ` · ${w.reference}` : ""}
+                    {w.receipt ? ` · ${w.receipt}` : ""} · {shortTime(w.created_at)}
+                  </div>
+                  <div className="text-[11px] text-muted">
+                    Deposited <span className="text-fg">{money(w.userDeposited)}</span> · Withdrawn{" "}
+                    <span className="text-fg">{money(w.userWithdrawn)}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="tabular text-sm font-bold text-gold">{money(w.amount)}</div>
+                  <WdStatus status={w.status} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

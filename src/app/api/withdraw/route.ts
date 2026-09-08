@@ -63,24 +63,6 @@ export async function POST(req: Request) {
   await ensureSchema();
   const sql = db();
 
-  // Bonus funds must be wagered before they can be withdrawn.
-  const lockRows = (await sql`
-    SELECT balance, bonus_locked FROM abetrade_users WHERE id = ${session.id} LIMIT 1
-  `) as Array<{ balance: string | number; bonus_locked: string | number }>;
-  if (lockRows.length) {
-    const bal = Number(lockRows[0].balance);
-    const locked = Number(lockRows[0].bonus_locked || 0);
-    const withdrawable = Math.max(0, bal - locked);
-    if (locked > 0 && amount > withdrawable) {
-      return NextResponse.json(
-        {
-          error: `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.`,
-        },
-        { status: 403 }
-      );
-    }
-  }
-
   if (await isBlocked(session.id)) {
     return NextResponse.json(
       { error: "Your account is suspended. Please contact support." },
@@ -88,33 +70,31 @@ export async function POST(req: Request) {
     );
   }
 
-  // Anti-banking rule: this is a trading platform, not a wallet. You can't
-  // deposit and cash straight back out — you must actually TRADE first. We
-  // require lifetime trading turnover (total staked, real account) to be at
-  // least THREE TIMES lifetime deposits before any withdrawal is allowed.
-  // Winnings are freely withdrawable; every fresh deposit must be traded
-  // through (3×) before it can leave. Demo turnover doesn't count.
-  const WAGER_MULTIPLIER = 3;
-  const flow = (await sql`
+  // Withdrawals are PROFIT-ONLY. Your deposits can never be withdrawn — only
+  // profit above your lifetime deposits (and never locked bonus funds). So if
+  // you deposit $5, trade and drop to $2, that $2 is remaining deposit and
+  // stays in to trade with; you can only cash out once your balance rises above
+  // what you've put in. This is a trading platform, not a banking service.
+  //   withdrawable = balance − lifetime deposits − locked bonus
+  const posRows = (await sql`
     SELECT
+      balance,
+      COALESCE(bonus_locked, 0) AS bonus_locked,
       COALESCE((SELECT SUM(amount) FROM abetrade_transactions
                  WHERE user_id = ${session.id} AND type = 'deposit'
-                   AND status = 'completed' AND is_demo = false), 0) AS deposited,
-      COALESCE((SELECT SUM(-amount) FROM abetrade_transactions
-                 WHERE user_id = ${session.id} AND type = 'trade_stake'
-                   AND is_demo = false), 0) AS staked
-  `) as Array<{ deposited: string | number; staked: string | number }>;
-  const deposited = Number(flow[0]?.deposited ?? 0);
-  const staked = Number(flow[0]?.staked ?? 0);
-  const required = deposited * WAGER_MULTIPLIER;
-  if (staked < required) {
-    const needMore = (required - staked) / 100;
-    return NextResponse.json(
-      {
-        error: `Withdrawals unlock after you trade. ${BRAND_NAME} is not a banking service — only deposit when you intend to trade. You need to place trades worth about $${needMore.toFixed(2)} more (deposits must be traded through ${WAGER_MULTIPLIER}× before they can be withdrawn).`,
-      },
-      { status: 403 }
-    );
+                   AND status = 'completed' AND is_demo = false), 0) AS deposited
+    FROM abetrade_users WHERE id = ${session.id} LIMIT 1
+  `) as Array<{ balance: string | number; bonus_locked: string | number; deposited: string | number }>;
+  const posBal = Number(posRows[0]?.balance ?? 0);
+  const posLocked = Number(posRows[0]?.bonus_locked ?? 0);
+  const posDeposited = Number(posRows[0]?.deposited ?? 0);
+  const withdrawable = Math.max(0, posBal - posDeposited - posLocked);
+  if (amount > withdrawable) {
+    const msg =
+      withdrawable <= 0
+        ? `Only your profit can be withdrawn — your deposits stay in to trade with. Keep trading, and once you're in profit you can cash it out. (${BRAND_NAME} is a trading platform, not a banking service.)`
+        : `You can withdraw your profit of up to $${(withdrawable / 100).toFixed(2)} right now — deposits themselves can't be withdrawn, only profit.`;
+    return NextResponse.json({ error: msg }, { status: 403 });
   }
 
   // Instant-withdrawal daily limits (per account, resets at UTC midnight).
@@ -141,28 +121,26 @@ export async function POST(req: Request) {
     );
   }
 
-  // Reserve funds atomically on the WITHDRAWABLE balance (balance minus any
-  // locked bonus). This single guarded UPDATE is the real security boundary:
-  //  • you can never withdraw more than you actually have, and
-  //  • locked bonus funds can never leave the account,
-  // and it is race-safe — two concurrent requests can't both pass, so a user
-  // can't fire off parallel withdrawals to overdraw or drain the bonus.
+  // Reserve funds atomically on the PROFIT-ONLY withdrawable amount
+  // (balance − lifetime deposits − locked bonus). This single guarded UPDATE is
+  // the real security boundary: you can never withdraw a deposit or locked
+  // bonus, never overdraw, and it's race-safe (two concurrent requests can't
+  // both pass), so nobody can fire parallel withdrawals to get around it.
   const debit = (await sql`
-    UPDATE abetrade_users SET balance = balance - ${amount}
-    WHERE id = ${session.id}
-      AND balance - GREATEST(COALESCE(bonus_locked, 0), 0) >= ${amount}
+    UPDATE abetrade_users u SET balance = balance - ${amount}
+    WHERE u.id = ${session.id}
+      AND u.balance
+          - GREATEST(COALESCE(u.bonus_locked, 0), 0)
+          - COALESCE((SELECT SUM(amount) FROM abetrade_transactions
+                       WHERE user_id = u.id AND type = 'deposit'
+                         AND status = 'completed' AND is_demo = false), 0)
+          >= ${amount}
     RETURNING balance
   `) as any[];
 
   if (!debit.length) {
-    // Report the true ceiling so the message is never misleading.
-    const w = (await sql`
-      SELECT GREATEST(balance - GREATEST(COALESCE(bonus_locked, 0), 0), 0) AS withdrawable
-      FROM abetrade_users WHERE id = ${session.id} LIMIT 1
-    `) as Array<{ withdrawable: string | number }>;
-    const wc = Number(w[0]?.withdrawable ?? 0);
     return NextResponse.json(
-      { error: `You can withdraw up to $${(wc / 100).toFixed(2)} right now.` },
+      { error: `You can withdraw your profit of up to $${(withdrawable / 100).toFixed(2)} right now — deposits can't be withdrawn, only profit.` },
       { status: 402 }
     );
   }

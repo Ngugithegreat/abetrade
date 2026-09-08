@@ -14,7 +14,7 @@ export async function GET() {
   await ensureSchema();
   const sql = db();
 
-  const [pending, users, kpi, daily, topUsers, kycPending, testAccounts] = await Promise.all([
+  const [pending, users, kpi, daily, topUsers, kycPending, testAccounts, withdrawalsRaw] = await Promise.all([
     sql`
       SELECT t.*, u.email, u.name AS user_name
       FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
@@ -71,6 +71,18 @@ export async function GET() {
       LIMIT 1000
     ` as Promise<any[]>,
     sql`SELECT id, name, email, test_win_pct FROM abetrade_users WHERE is_test = true ORDER BY email` as Promise<any[]>,
+    sql`
+      SELECT t.id, t.user_id, t.amount, t.status, t.method, t.reference, t.receipt, t.created_at,
+             u.name, u.email,
+             COALESCE((SELECT SUM(x.amount) FROM abetrade_transactions x
+                        WHERE x.user_id = t.user_id AND x.type='deposit' AND x.status='completed' AND x.is_demo=false),0) AS user_deposited,
+             COALESCE((SELECT SUM(-x.amount) FROM abetrade_transactions x
+                        WHERE x.user_id = t.user_id AND x.type='withdrawal' AND x.status<>'rejected' AND x.is_demo=false),0) AS user_withdrawn
+      FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
+      WHERE t.type = 'withdrawal' AND t.is_demo = false
+      ORDER BY t.created_at DESC
+      LIMIT 200
+    ` as Promise<any[]>,
   ]);
 
   const [houseEdge, referralPct, maxStakeCents, maxPayoutCents, globalTest, globalTestPct, wdDailyCount, wdDailyMaxCents] =
@@ -126,6 +138,19 @@ export async function GET() {
       kyc_name: u.kyc_name,
       kyc_id_number: u.kyc_id_number,
       kyc_phone: u.kyc_phone,
+    })),
+    withdrawals: withdrawalsRaw.map((w) => ({
+      id: w.id,
+      name: w.name,
+      account_no: accountNo(w.user_id),
+      amount: Math.abs(Number(w.amount)),
+      status: w.status,
+      method: w.method,
+      reference: w.reference,
+      receipt: w.receipt,
+      created_at: w.created_at,
+      userDeposited: num(w.user_deposited),
+      userWithdrawn: num(w.user_withdrawn),
     })),
     topUsers: topUsers.map((u) => ({
       ...u,
