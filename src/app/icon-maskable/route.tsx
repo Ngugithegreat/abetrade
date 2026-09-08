@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { LOGO_FROM, LOGO_TO } from "@/lib/brand";
 
 export const runtime = "nodejs";
 export const dynamic = "force-static";
@@ -17,7 +18,7 @@ export function GET() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #A78BFF 0%, #6A47F5 100%)",
+          background: `linear-gradient(135deg, ${LOGO_FROM} 0%, ${LOGO_TO} 100%)`,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}

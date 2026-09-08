@@ -61,81 +61,8 @@ export function playLoseSound() {
   tone(196, 0, 0.28, 0.1, "triangle"); // low G3 thud
 }
 
-const COLORS = ["#6A47F5", "#9E86FF", "#00E39A", "#5B8DEF", "#FFB020", "#FF4D6D"];
-
-export function confettiBurst() {
-  if (typeof document === "undefined") return;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.style.cssText =
-      "position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:70;";
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = window.innerWidth * dpr;
-    canvas.height = window.innerHeight * dpr;
-    document.body.appendChild(canvas);
-    const g = canvas.getContext("2d");
-    if (!g) {
-      canvas.remove();
-      return;
-    }
-    g.scale(dpr, dpr);
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-
-    const N = Math.min(160, Math.floor(W / 6));
-    const parts = Array.from({ length: N }, () => ({
-      x: W / 2 + (Math.random() - 0.5) * W * 0.5,
-      y: H * 0.32 + (Math.random() - 0.5) * 60,
-      vx: (Math.random() - 0.5) * 9,
-      vy: Math.random() * -12 - 4,
-      size: 5 + Math.random() * 6,
-      rot: Math.random() * Math.PI,
-      vr: (Math.random() - 0.5) * 0.3,
-      color: COLORS[(Math.random() * COLORS.length) | 0],
-      life: 0,
-    }));
-
-    const GRAV = 0.32;
-    const MAX = 150; // ~2.5s
-    let frame = 0;
-
-    function draw() {
-      frame++;
-      g!.clearRect(0, 0, W, H);
-      for (const p of parts) {
-        p.vy += GRAV;
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vx *= 0.99;
-        p.rot += p.vr;
-        p.life++;
-        const alpha = Math.max(0, 1 - frame / MAX);
-        g!.save();
-        g!.translate(p.x, p.y);
-        g!.rotate(p.rot);
-        g!.globalAlpha = alpha;
-        g!.fillStyle = p.color;
-        g!.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
-        g!.restore();
-      }
-      if (frame < MAX) {
-        requestAnimationFrame(draw);
-      } else {
-        canvas.remove();
-      }
-    }
-    requestAnimationFrame(draw);
-  } catch {
-    /* ignore */
-  }
-}
-
 export function celebrateWin() {
-  const reduce =
-    typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduce) confettiBurst();
+  // Confetti removed by request — keep just the win sound.
   playWinSound();
 }
 

@@ -1,3 +1,5 @@
+import { LOGO_FROM, LOGO_TO } from "@/lib/brand";
+
 export function Logo({ className = "h-8 w-8" }: { className?: string }) {
   // SinTrades mark: a rising sine wave ("Sin") — the curve of a volatility
   // index — inside a soft violet tile, with a live-price node at the crest.
@@ -38,8 +40,8 @@ export function Logo({ className = "h-8 w-8" }: { className?: string }) {
       <circle cx="24" cy="13.6" r="2.6" fill="url(#stg)" fillOpacity="0.15" />
       <defs>
         <linearGradient id="stg" x1="0" y1="0" x2="32" y2="32">
-          <stop stopColor="#A78BFF" />
-          <stop offset="1" stopColor="#6A47F5" />
+          <stop stopColor={LOGO_FROM} />
+          <stop offset="1" stopColor={LOGO_TO} />
         </linearGradient>
         <linearGradient id="stgloss" x1="16" y1="0" x2="16" y2="32">
           <stop stopColor="#fff" />

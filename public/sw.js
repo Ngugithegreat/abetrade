@@ -43,7 +43,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || "",
     icon: "/apple-icon",
-    badge: "/icon.svg",
+    badge: "/apple-icon",
     data: { url: data.url || "/trade" },
     vibrate: [60, 40, 60],
   };
