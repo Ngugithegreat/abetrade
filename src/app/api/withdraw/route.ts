@@ -127,15 +127,30 @@ export async function POST(req: Request) {
     );
   }
 
-  // Reserve funds atomically.
+  // Reserve funds atomically on the WITHDRAWABLE balance (balance minus any
+  // locked bonus). This single guarded UPDATE is the real security boundary:
+  //  • you can never withdraw more than you actually have, and
+  //  • locked bonus funds can never leave the account,
+  // and it is race-safe — two concurrent requests can't both pass, so a user
+  // can't fire off parallel withdrawals to overdraw or drain the bonus.
   const debit = (await sql`
     UPDATE abetrade_users SET balance = balance - ${amount}
-    WHERE id = ${session.id} AND balance >= ${amount}
+    WHERE id = ${session.id}
+      AND balance - GREATEST(COALESCE(bonus_locked, 0), 0) >= ${amount}
     RETURNING balance
   `) as any[];
 
   if (!debit.length) {
-    return NextResponse.json({ error: "Insufficient balance." }, { status: 402 });
+    // Report the true ceiling so the message is never misleading.
+    const w = (await sql`
+      SELECT GREATEST(balance - GREATEST(COALESCE(bonus_locked, 0), 0), 0) AS withdrawable
+      FROM abetrade_users WHERE id = ${session.id} LIMIT 1
+    `) as Array<{ withdrawable: string | number }>;
+    const wc = Number(w[0]?.withdrawable ?? 0);
+    return NextResponse.json(
+      { error: `You can withdraw up to $${(wc / 100).toFixed(2)} right now.` },
+      { status: 402 }
+    );
   }
   const balanceAfter = Number(debit[0].balance);
 
