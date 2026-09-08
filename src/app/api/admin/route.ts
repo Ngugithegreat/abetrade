@@ -61,7 +61,7 @@ export async function GET() {
       LEFT JOIN abetrade_trades t ON t.user_id = u.id
       GROUP BY u.id
       ORDER BY u.created_at DESC
-      LIMIT 100
+      LIMIT 5000
     ` as Promise<any[]>,
     sql`
       SELECT id, name, email, kyc_name, kyc_id_number, kyc_phone, kyc_submitted_at

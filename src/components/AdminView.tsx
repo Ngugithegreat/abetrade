@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Gift,
   Megaphone,
+  Search,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell } from "recharts";
 import { money, shortTime } from "@/lib/format";
@@ -51,6 +52,7 @@ export function AdminView() {
   const [data, setData] = useState<any>(null);
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userQuery, setUserQuery] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin", { cache: "no-store" });
@@ -86,6 +88,15 @@ export function AdminView() {
 
   const k = data.kpi;
   const players: Player[] = data.topUsers || [];
+  const q = userQuery.trim().toLowerCase();
+  const filteredPlayers = q
+    ? players.filter(
+        (u) =>
+          (u.name || "").toLowerCase().includes(q) ||
+          (u.email || "").toLowerCase().includes(q) ||
+          (u.account_no || "").toLowerCase().includes(q)
+      )
+    : players;
   const daily = (data.daily || []).map((d: any) => ({
     label: new Date(d.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     volume: d.volume / 100,
@@ -228,13 +239,32 @@ export function AdminView() {
 
       {/* Player management */}
       <div className="card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <span className="font-bold">Users &amp; accounts ({players.length})</span>
-          <span className="text-[11px] text-muted">Balance · real deposits · withdrawals · manage</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <span className="font-bold">
+            Users &amp; accounts ({q ? `${filteredPlayers.length} of ${players.length}` : players.length})
+          </span>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+            <input
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              placeholder="Search name, email or account…"
+              className="w-full rounded-lg border border-border bg-surface2 py-1.5 pl-8 pr-8 text-xs outline-none focus:border-brand/50 sm:w-64"
+            />
+            {q && (
+              <button
+                onClick={() => setUserQuery("")}
+                title="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-fg"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="max-h-[560px] overflow-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-surface">
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted">
                 <th className="px-5 py-2 font-medium">Account</th>
                 <th className="px-3 py-2 text-right font-medium">Balance</th>
@@ -247,9 +277,15 @@ export function AdminView() {
               </tr>
             </thead>
             <tbody>
-              {players.map((u) => (
-                <PlayerRow key={u.id} u={u} onAction={post} />
-              ))}
+              {filteredPlayers.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted">
+                    {q ? `No users match “${userQuery.trim()}”.` : "No users yet."}
+                  </td>
+                </tr>
+              ) : (
+                filteredPlayers.map((u) => <PlayerRow key={u.id} u={u} onAction={post} />)
+              )}
             </tbody>
           </table>
         </div>
