@@ -19,6 +19,7 @@ import {
   Check,
   FlaskConical,
   RotateCcw,
+  Lock,
 } from "lucide-react";
 import { useApp, Txn } from "./app-context";
 import { money, shortTime } from "@/lib/format";
@@ -40,6 +41,13 @@ const METHOD_DEFS: Record<string, MethodDef> = {
 // Minimum crypto deposit in USD (mirrors the server's CRYPTO_MIN_USD). Small
 // crypto deposits are eaten by network fees, so we set a floor and show it.
 const CRYPTO_MIN_USD = Number(process.env.NEXT_PUBLIC_CRYPTO_MIN_USD || 20);
+
+// Pretty-print a stored MSISDN (2547XXXXXXXX) as +254 7XX XXX XXX.
+function fmtLocalPhone(p: string | null | undefined): string {
+  const d = String(p || "").replace(/\D/g, "");
+  if (d.startsWith("254") && d.length === 12) return `+254 ${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}`;
+  return p || "";
+}
 
 // Deposit rails come from the user's country.
 function depositMethods(country: string | null | undefined): string[] {
@@ -508,22 +516,14 @@ function MoneyForm({
   const isHostedDeposit = kind === "deposit" && gatewayReady;
   const showReference = kind === "withdraw" || (kind === "deposit" && !isHostedDeposit);
 
-  // Prefill the phone for phone methods: the number the user saved on this
-  // device wins, otherwise fall back to the phone they gave at signup.
+  // Phone methods (M-Pesa / MTN / Airtel) are LOCKED to the account's verified
+  // profile phone — it can't be edited here; the user changes it under Profile
+  // (with SMS verification). Non-phone methods start blank (crypto = wallet
+  // address, etc.).
   useEffect(() => {
-    if (!needsPhone || reference) return;
-    try {
-      const saved = localStorage.getItem("st_phone");
-      if (saved) {
-        setReference(saved);
-        return;
-      }
-    } catch {
-      /* ignore */
-    }
-    if (defaultPhone) setReference(defaultPhone);
+    setReference(needsPhone ? defaultPhone || "" : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method]);
+  }, [method, defaultPhone]);
 
   function rememberPhone(p: string) {
     try {
@@ -651,6 +651,10 @@ function MoneyForm({
     }
     if (kind === "withdraw" && amountNum * 100 > max) {
       setMsg({ text: "Amount exceeds your balance.", ok: false });
+      return;
+    }
+    if (needsPhone && !defaultPhone) {
+      setMsg({ text: `Add and verify your phone under Profile to use ${methodDef.label}.`, ok: false });
       return;
     }
     setBusy(true);
@@ -782,12 +786,36 @@ function MoneyForm({
         </div>
       )}
 
-      {showReference && (
+      {showReference && needsPhone ? (
+        // Phone is LOCKED to the verified profile number — not editable here.
         <div>
           <label className="mb-1 block text-xs font-medium text-muted">
-            {needsPhone
-              ? `${methodDef.label} phone number`
-              : kind === "deposit"
+            {methodDef.label} number
+          </label>
+          {defaultPhone ? (
+            <>
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-surface2/50 px-3 py-2.5">
+                <Lock className="h-4 w-4 shrink-0 text-muted" />
+                <span className="tabular flex-1 text-sm font-semibold">{fmtLocalPhone(defaultPhone)}</span>
+                <span className="rounded-md bg-up/10 px-1.5 py-0.5 text-[10px] font-bold text-up">VERIFIED</span>
+              </div>
+              <p className="mt-1 text-[11px] text-muted">
+                To use a different number,{" "}
+                <a href="/profile" className="font-semibold text-brand underline">change your phone under Profile</a>.
+              </p>
+            </>
+          ) : (
+            <div className="rounded-xl border border-gold/40 bg-gold/10 px-3 py-2.5 text-xs text-fg">
+              Add and verify your phone under{" "}
+              <a href="/profile" className="font-semibold text-brand underline">Profile</a>{" "}
+              to {kind === "deposit" ? "deposit" : "withdraw"} via {methodDef.label}.
+            </div>
+          )}
+        </div>
+      ) : showReference ? (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">
+            {kind === "deposit"
               ? "Sender reference"
               : method === "crypto"
               ? "Your payout wallet address"
@@ -800,7 +828,7 @@ function MoneyForm({
             onChange={(e) => setReference(e.target.value)}
           />
         </div>
-      )}
+      ) : null}
 
       {needsPhone && amountNum > 0 && (
         <div className="flex items-center justify-between rounded-xl border border-border bg-surface2/50 px-3 py-2 text-xs">

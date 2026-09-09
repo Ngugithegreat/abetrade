@@ -33,16 +33,21 @@ type Profile = {
 };
 
 export function ProfileView() {
-  const { user, logout } = useApp();
+  const { user, logout, refresh } = useApp();
   const [p, setP] = useState<Profile | null>(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
+  const loadProfile = () =>
     fetch("/api/profile", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => j.profile && setP(j.profile))
       .catch(() => {});
+
+  useEffect(() => {
+    loadProfile();
   }, []);
+
+  const phone = p?.phone ?? user?.phone ?? null;
 
   const name = p?.name ?? user?.name ?? "";
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("") || "U";
@@ -93,13 +98,21 @@ export function ProfileView() {
         <div className="mb-3 text-sm font-bold">Account details</div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Detail icon={Mail} label="Email" value={p?.email ?? user?.email ?? "—"} />
-          <Detail icon={Phone} label="Phone" value={p?.phone ?? user?.phone ?? "Not set"} />
           <Detail icon={Globe} label="Country" value={country ? `${country.flag} ${country.name}` : "—"} />
           <Detail icon={Hash} label="Account number" value={p?.account_no ?? user?.account_no ?? "—"} />
           <Detail icon={CalendarDays} label="Member since" value={memberSince} />
           <Detail icon={TrendingUp} label="Balance" value={money(p?.balance ?? user?.balance ?? 0)} />
         </div>
       </div>
+
+      {/* Phone number — verified change */}
+      <PhoneCard
+        phone={phone}
+        onChanged={async () => {
+          await loadProfile();
+          await refresh();
+        }}
+      />
 
       {/* Trading stats */}
       <div className="card p-5">
@@ -121,6 +134,170 @@ export function ProfileView() {
       <button onClick={logout} className="btn btn-ghost w-full border border-border py-3 text-sm text-down">
         <LogOut className="h-4 w-4" /> Log out
       </button>
+    </div>
+  );
+}
+
+function fmtPhone(p: string | null): string {
+  if (!p) return "Not set";
+  const d = p.replace(/\D/g, "");
+  if (d.startsWith("254") && d.length === 12) return `+254 ${d.slice(3, 6)} ${d.slice(6, 9)} ${d.slice(9)}`;
+  return p;
+}
+
+const H = { "Content-Type": "application/json" };
+
+function PhoneCard({ phone, onChanged }: { phone: string | null; onChanged: () => void | Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const [stepCode, setStepCode] = useState(false);
+  const [newPhone, setNewPhone] = useState("");
+  const [sentPhone, setSentPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  function reset() {
+    setEditing(false);
+    setStepCode(false);
+    setNewPhone("");
+    setSentPhone("");
+    setCode("");
+    setError(null);
+  }
+
+  async function sendCode() {
+    setError(null);
+    setOk(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/profile/phone/send", { method: "POST", headers: H, body: JSON.stringify({ phone: newPhone }) });
+      const j = await res.json();
+      if (!res.ok) return setError(j.error || "Could not send the code.");
+      if (j.required) {
+        setSentPhone(j.phone || newPhone);
+        setStepCode(true);
+        setResendIn(60);
+      } else {
+        await onChanged();
+        setOk("Phone number updated.");
+        reset();
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify() {
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/profile/phone/verify", { method: "POST", headers: H, body: JSON.stringify({ phone: sentPhone, code }) });
+      const j = await res.json();
+      if (!res.ok) return setError(j.error || "Verification failed.");
+      await onChanged();
+      setOk("Phone number verified and updated. ✓");
+      reset();
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resend() {
+    if (resendIn > 0) return;
+    setError(null);
+    const res = await fetch("/api/profile/phone/send", { method: "POST", headers: H, body: JSON.stringify({ phone: sentPhone || newPhone }) });
+    const j = await res.json();
+    if (!res.ok) setError(j.error || "Could not resend.");
+    else setResendIn(j.retryAfterSec || 60);
+  }
+
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-bold">Phone number</div>
+        {phone && !editing && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-up/30 bg-up/10 px-2 py-0.5 text-[10px] font-semibold text-up">
+            <ShieldCheck className="h-3 w-3" /> Verified
+          </span>
+        )}
+      </div>
+
+      {!editing ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface2 text-brand">
+              <Phone className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="tabular text-lg font-bold">{fmtPhone(phone)}</div>
+              <div className="text-[11px] text-muted">Used to authorize your M-Pesa deposits &amp; withdrawals.</div>
+            </div>
+          </div>
+          <button onClick={() => { setEditing(true); setOk(null); }} className="btn btn-ghost px-3 py-2 text-xs">
+            {phone ? "Change number" : "Add phone"}
+          </button>
+        </div>
+      ) : !stepCode ? (
+        <div className="mt-3 space-y-2.5">
+          <label className="block text-xs font-medium text-muted">New phone number</label>
+          <input
+            className="input tabular"
+            inputMode="tel"
+            placeholder="0712345678"
+            value={newPhone}
+            onChange={(e) => setNewPhone(e.target.value.replace(/[^\d+]/g, ""))}
+            autoFocus
+          />
+          <p className="text-[11px] text-muted">We’ll text a 6-digit code to this number to confirm it’s yours.</p>
+          {error && <p className="text-xs text-down">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={sendCode} disabled={busy || newPhone.length < 9} className="btn btn-brand flex-1 py-2 text-sm">
+              {busy ? "Sending…" : "Send code"}
+            </button>
+            <button onClick={reset} className="btn btn-ghost px-3 py-2 text-sm">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-2.5">
+          <label className="block text-xs font-medium text-muted">
+            Enter the code sent to <span className="font-semibold text-fg">{fmtPhone(sentPhone)}</span>
+          </label>
+          <input
+            className="input tabular text-center text-xl font-bold tracking-[0.4em]"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="••••••"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            autoFocus
+          />
+          {error && <p className="text-xs text-down">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={verify} disabled={busy || code.length !== 6} className="btn btn-brand flex-1 py-2 text-sm">
+              {busy ? "Verifying…" : "Verify & save"}
+            </button>
+            <button onClick={() => setStepCode(false)} className="btn btn-ghost px-3 py-2 text-sm">Back</button>
+          </div>
+          <button onClick={resend} disabled={resendIn > 0} className={`text-xs ${resendIn > 0 ? "text-muted" : "font-semibold text-brand"}`}>
+            {resendIn > 0 ? `Resend code in ${resendIn}s` : "Resend code"}
+          </button>
+        </div>
+      )}
+
+      {ok && !editing && <p className="mt-2 text-xs font-semibold text-up">{ok}</p>}
     </div>
   );
 }
