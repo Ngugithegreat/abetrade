@@ -84,7 +84,10 @@ export function AdminView() {
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [userQuery]);
+    // Re-runs on `data` too: after an admin action (grant bonus, block, …) the
+    // dashboard reloads, and this refreshes the searched rows so their balance /
+    // status reflect the change even for accounts beyond the preloaded 5000.
+  }, [userQuery, data]);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin", { cache: "no-store" });
@@ -408,10 +411,18 @@ function PlayerRow({
   const [busy, setBusy] = useState(false);
   const blocked = u.status === "blocked";
 
-  async function run(p: Record<string, unknown>) {
+  async function run(p: Record<string, unknown>, onOk?: (j: any) => void) {
     setBusy(true);
     try {
-      await onAction(p);
+      const res = await onAction(p);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(j.error || "Action failed. Please try again.");
+        return;
+      }
+      onOk?.(j);
+    } catch {
+      window.alert("Network error — action not applied.");
     } finally {
       setBusy(false);
     }
@@ -422,7 +433,11 @@ function PlayerRow({
     if (raw == null) return;
     const amount = Number(raw);
     if (!Number.isFinite(amount) || amount === 0) return;
-    run({ action: "grant_bonus", userId: u.id, amount });
+    run({ action: "grant_bonus", userId: u.id, amount }, (j) =>
+      window.alert(
+        `Bonus applied to ${u.name}. New balance: ${money(Number(j.balance ?? 0))}.`
+      )
+    );
   }
 
   return (
