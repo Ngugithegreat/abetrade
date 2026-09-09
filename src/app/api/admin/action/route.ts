@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/auth";
 import { setHouseEdge, setReferralPct, setMaxStakeCents, setMaxPayoutCents, setGlobalTest, setGlobalTestPct, setWithdrawDailyCount, setWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, depositReceiptEmail, kycApprovedEmail, kycRejectedEmail } from "@/lib/email";
 import { payReferralOnDeposit } from "@/lib/referral";
+import { bustAdminCache } from "@/lib/adminCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ export async function POST(req: Request) {
   const action = String(body.action || "");
 
   await ensureSchema();
+  // Any action can change what the dashboard shows — drop the cached snapshot so
+  // the next admin load reflects it immediately.
+  bustAdminCache();
   const sql = db();
 
   // ---- House edge (percent, e.g. 5 => 0.05) ----

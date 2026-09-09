@@ -3,6 +3,7 @@ import { db, ensureSchema } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { getHouseEdge, getReferralPct, getMaxStakeCents, getMaxPayoutCents, getGlobalTest, getGlobalTestPct, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { accountNo } from "@/lib/format";
+import { getAdminCache, setAdminCache } from "@/lib/adminCache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,11 @@ export async function GET() {
   if (!(await isAdmin())) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
+  // Serve a very recent cached snapshot instantly; the heavy aggregates below
+  // run at most once per TTL per instance. Admin actions bust this cache.
+  const cached = getAdminCache();
+  if (cached) return NextResponse.json(cached);
+
   await ensureSchema();
   const sql = db();
 
@@ -117,7 +123,7 @@ export async function GET() {
   const k = kpi[0] || {};
   const num = (v: any) => Number(v ?? 0);
 
-  return NextResponse.json({
+  const payload = {
     pending,
     users: users.map((u) => ({ ...u, balance: num(u.balance) })),
     kpi: {
@@ -196,5 +202,8 @@ export async function GET() {
       withdrawn: num(u.withdrawn),
       depositMethod: u.deposit_method || null,
     })),
-  });
+  };
+
+  setAdminCache(payload);
+  return NextResponse.json(payload);
 }

@@ -44,7 +44,7 @@ function getSql(): NeonQueryFunction<false, false> {
 
 // Bump whenever the DDL in runMigration() changes so a fresh deploy re-applies
 // it exactly once; every request after that skips the DDL entirely.
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 let _migrating: Promise<void> | null = null;
 
 /**
@@ -238,6 +238,14 @@ async function runMigration(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON abetrade_transactions(provider_ref)`;
   // Speeds up the case-insensitive login/register email lookup and admin search.
   await sql`CREATE INDEX IF NOT EXISTS idx_users_email_lower ON abetrade_users(lower(email))`;
+  // Admin KPI sums group by (type,status); the 14-day volume chart scans by
+  // (type,created_at). One composite serves both without a full seq scan — this
+  // is what keeps the admin dashboard fast as the transactions table grows.
+  await sql`CREATE INDEX IF NOT EXISTS idx_tx_type_status_created ON abetrade_transactions(type, status, created_at DESC)`;
+  // Admin trade KPIs filter on (is_demo,status).
+  await sql`CREATE INDEX IF NOT EXISTS idx_trades_demo_status ON abetrade_trades(is_demo, status)`;
+  // Newest-accounts admin table + user list order by created_at.
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_created ON abetrade_users(created_at DESC)`;
 
   // Record the schema version so future cold starts skip all of the above.
   await sql`CREATE TABLE IF NOT EXISTS abetrade_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)`;
