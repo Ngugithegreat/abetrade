@@ -3,13 +3,14 @@ import { db, ensureSchema } from "@/lib/db";
 import { hashPassword, createSession } from "@/lib/auth";
 import { sendEmail, welcomeEmail } from "@/lib/email";
 import { idFromAccountNo } from "@/lib/format";
+import { otpRequiredFor, verifySignupOtp } from "@/lib/otp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, country, ref, phone } = await req.json();
+    const { name, email, password, country, ref, phone, code } = await req.json();
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "All fields are required." }, { status: 400 });
@@ -33,6 +34,19 @@ export async function POST(req: Request) {
         { error: "An account with that email already exists." },
         { status: 409 }
       );
+    }
+
+    // Phone-OTP gate (Kenya): the account is only created after the SMS code is
+    // verified. Enforced here independently of the client, so it can't be
+    // skipped by calling register directly.
+    if (otpRequiredFor(cleanCountry)) {
+      if (!cleanPhone) {
+        return NextResponse.json({ error: "A phone number is required." }, { status: 400 });
+      }
+      const v = await verifySignupOtp(cleanPhone, String(code || ""));
+      if (!v.ok) {
+        return NextResponse.json({ error: v.error || "Phone verification failed.", needOtp: true }, { status: 400 });
+      }
     }
 
     // Admin if the email matches ADMIN_EMAIL, OR if this is the very first

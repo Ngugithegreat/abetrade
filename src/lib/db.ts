@@ -44,7 +44,7 @@ function getSql(): NeonQueryFunction<false, false> {
 
 // Bump whenever the DDL in runMigration() changes so a fresh deploy re-applies
 // it exactly once; every request after that skips the DDL entirely.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 let _migrating: Promise<void> | null = null;
 
 /**
@@ -246,6 +246,17 @@ async function runMigration(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS idx_trades_demo_status ON abetrade_trades(is_demo, status)`;
   // Newest-accounts admin table + user list order by created_at.
   await sql`CREATE INDEX IF NOT EXISTS idx_users_created ON abetrade_users(created_at DESC)`;
+
+  // Signup phone-OTP codes (stored hashed). One row per phone, upserted on send.
+  await sql`
+    CREATE TABLE IF NOT EXISTS abetrade_otps (
+      phone        TEXT PRIMARY KEY,
+      code_hash    TEXT NOT NULL,
+      expires_at   TIMESTAMPTZ NOT NULL,
+      attempts     INTEGER NOT NULL DEFAULT 0,
+      last_sent_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
 
   // Record the schema version so future cold starts skip all of the above.
   await sql`CREATE TABLE IF NOT EXISTS abetrade_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)`;

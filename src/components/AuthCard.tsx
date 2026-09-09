@@ -20,6 +20,12 @@ export function AuthCard({ initial }: { initial: Mode }) {
   const [ref, setRef] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Two-step signup for OTP countries (Kenya): "form" collects details, "otp"
+  // enters the SMS code. Non-OTP signups skip straight through.
+  const [step, setStep] = useState<"form" | "otp">("form");
+  const [code, setCode] = useState("");
+  const [otpPhone, setOtpPhone] = useState("");
+  const [resendIn, setResendIn] = useState(0);
 
   // Pick up a referral code from the invite link (?ref=ST-100482).
   useEffect(() => {
@@ -30,19 +36,25 @@ export function AuthCard({ initial }: { initial: Mode }) {
     }
   }, []);
 
+  // Resend cooldown countdown.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((n) => n - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const headers = { "Content-Type": "application/json" };
+
+  // Sign in.
   async function submit(kind: Mode, e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const res = await fetch(`/api/auth/${kind === "signin" ? "login" : "register"}`, {
+      const res = await fetch(`/api/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          kind === "signup"
-            ? { name, email, password, phone: phone || undefined, country, ref: ref || undefined }
-            : { email, password }
-        ),
+        headers,
+        body: JSON.stringify({ email, password }),
       });
       const json = await res.json();
       if (!res.ok) setError(json.error || "Something went wrong.");
@@ -57,6 +69,93 @@ export function AuthCard({ initial }: { initial: Mode }) {
     }
   }
 
+  // Create the account (optionally with an OTP code). Returns true on success.
+  async function registerNow(withCode?: string): Promise<boolean> {
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name,
+        email,
+        password,
+        phone: phone || undefined,
+        country,
+        ref: ref || undefined,
+        code: withCode,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "Something went wrong.");
+      if (json.needOtp) setStep("otp");
+      return false;
+    }
+    router.replace("/trade");
+    router.refresh();
+    return true;
+  }
+
+  // Step 1: from the signup form. Ask the server whether this country needs an
+  // SMS code; if so, send it and move to the code step, else register directly.
+  async function startSignup(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ phone, country, email }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || "Could not start signup.");
+        return;
+      }
+      if (json.required) {
+        setOtpPhone(json.phone || phone);
+        setCode("");
+        setStep("otp");
+        setResendIn(60);
+      } else {
+        await registerNow();
+      }
+    } catch {
+      setError("Network error. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Step 2: verify the SMS code and create the account.
+  async function verifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await registerNow(code);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendCode() {
+    if (resendIn > 0) return;
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ phone, country, email }),
+      });
+      const json = await res.json();
+      if (!res.ok) setError(json.error || "Could not resend the code.");
+      else setResendIn(json.retryAfterSec || 60);
+    } catch {
+      setError("Network error. Try again.");
+    }
+  }
+
   const shared = {
     email,
     setEmail,
@@ -65,6 +164,26 @@ export function AuthCard({ initial }: { initial: Mode }) {
     busy,
     error,
   };
+
+  // OTP verification step (Kenya signups).
+  if (mode === "signup" && step === "otp") {
+    return (
+      <OtpCard
+        phone={otpPhone}
+        code={code}
+        setCode={setCode}
+        onSubmit={verifyOtp}
+        onResend={resendCode}
+        onBack={() => {
+          setStep("form");
+          setError(null);
+        }}
+        busy={busy}
+        error={error}
+        resendIn={resendIn}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-8">
@@ -101,7 +220,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
               country={country}
               setCountry={setCountry}
               referral={ref}
-              onSubmit={(e) => submit("signup", e)}
+              onSubmit={startSignup}
             />
           </div>
 
@@ -129,7 +248,7 @@ export function AuthCard({ initial }: { initial: Mode }) {
               country={country}
               setCountry={setCountry}
               referral={ref}
-              onSubmit={(e) => submit("signup", e)}
+              onSubmit={startSignup}
             />
           )}
           <p className="mt-5 text-center text-sm text-muted">
@@ -141,6 +260,75 @@ export function AuthCard({ initial }: { initial: Mode }) {
               {mode === "signin" ? "Create account" : "Sign in"}
             </button>
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OtpCard({
+  phone,
+  code,
+  setCode,
+  onSubmit,
+  onResend,
+  onBack,
+  busy,
+  error,
+  resendIn,
+}: {
+  phone: string;
+  code: string;
+  setCode: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onResend: () => void;
+  onBack: () => void;
+  busy: boolean;
+  error: string | null;
+  resendIn: number;
+}) {
+  // Show the phone we texted with the middle masked (2547•••••123).
+  const masked = phone.length >= 6 ? `${phone.slice(0, 5)}•••••${phone.slice(-3)}` : phone;
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4 py-8">
+      <div className="card w-full max-w-sm p-7">
+        <div className="mb-5 flex items-center justify-center gap-2">
+          <Logo className="h-9 w-9" />
+          <span className="text-2xl font-bold tracking-tight">{BRAND_NAME}</span>
+        </div>
+        <h2 className="text-center text-lg font-bold">Verify your phone</h2>
+        <p className="mt-1 text-center text-sm text-muted">
+          Enter the 6-digit code we sent by SMS to <span className="font-semibold text-fg">{masked}</span>.
+        </p>
+
+        <form onSubmit={onSubmit} className="mt-5 space-y-3">
+          <input
+            className="input tabular text-center text-2xl font-bold tracking-[0.5em]"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            placeholder="••••••"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            autoFocus
+          />
+          {error && <p className="text-center text-xs text-down">{error}</p>}
+          <button type="submit" disabled={busy || code.length !== 6} className="btn btn-brand w-full py-2.5">
+            {busy ? "Verifying…" : "Verify & create account"}
+          </button>
+        </form>
+
+        <div className="mt-4 flex items-center justify-between text-xs">
+          <button onClick={onBack} className="text-muted hover:text-fg">
+            ← Change details
+          </button>
+          <button
+            onClick={onResend}
+            disabled={resendIn > 0}
+            className={resendIn > 0 ? "text-muted" : "font-semibold text-brand"}
+          >
+            {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
+          </button>
         </div>
       </div>
     </div>
