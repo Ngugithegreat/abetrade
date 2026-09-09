@@ -79,6 +79,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // Clear out abandoned PENDING deposit requests to declutter the admin. Only
+  // deletes pending deposits older than 20 minutes, so a payment still in flight
+  // (an STK prompt / hosted checkout the user is completing) is never removed.
+  // Completed deposits and all withdrawals are untouched.
+  if (action === "clear_pending_deposits") {
+    const r = (await sql`
+      DELETE FROM abetrade_transactions
+      WHERE type = 'deposit' AND status = 'pending'
+        AND created_at < now() - interval '20 minutes'
+      RETURNING id
+    `) as any[];
+    return NextResponse.json({ ok: true, cleared: r.length });
+  }
+
   // ---- Global test mode: whole system on simulated data at a set win % ----
   if (action === "set_global_test") {
     const on = !!body.on;

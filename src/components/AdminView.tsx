@@ -112,6 +112,28 @@ export function AdminView() {
       {/* Needs attention — anything debited but not settled (never in the dark) */}
       <AttentionCard items={data.attention || []} />
 
+      {k.depositsPending > 0 && (
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-border p-4">
+          <div className="min-w-0">
+            <div className="text-sm font-bold">{k.depositsPending} pending deposit{k.depositsPending === 1 ? "" : "s"}</div>
+            <div className="text-[11px] text-muted">
+              Clear abandoned deposit requests to declutter the panel. Only removes ones older than 20 min, so an in-flight payment is never deleted.
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              if (!window.confirm("Delete pending deposit requests older than 20 minutes? Completed deposits and withdrawals are not affected.")) return;
+              const res = await post({ action: "clear_pending_deposits" });
+              const j = await res.json().catch(() => ({}));
+              if (res.ok) window.alert(`Cleared ${j.cleared ?? 0} pending deposit${j.cleared === 1 ? "" : "s"}.`);
+            }}
+            className="btn btn-ghost shrink-0 border-down/40 px-3 py-2 text-xs text-down"
+          >
+            Clear pending deposits
+          </button>
+        </div>
+      )}
+
       {/* Global test mode */}
       <GlobalTestCard
         on={!!data.globalTest}

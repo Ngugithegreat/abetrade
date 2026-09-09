@@ -6,6 +6,7 @@ import { accountNo } from "@/lib/format";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
   if (!(await isAdmin())) {
@@ -20,6 +21,7 @@ export async function GET() {
       FROM abetrade_transactions t JOIN abetrade_users u ON u.id = t.user_id
       WHERE t.status = 'pending'
       ORDER BY t.created_at ASC
+      LIMIT 300
     ` as Promise<any[]>,
     sql`SELECT id, name, email, role, balance, created_at FROM abetrade_users ORDER BY created_at DESC LIMIT 100` as Promise<any[]>,
     sql`
