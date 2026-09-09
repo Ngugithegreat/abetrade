@@ -3,6 +3,7 @@ import { sendEmail, depositReceiptEmail } from "./email";
 import { payReferralOnDeposit } from "./referral";
 import { stkStatus } from "./mpesa";
 import { sendPushToUser } from "./push";
+import { getPaymentStatus, receivedUsdCents, isCryptoConfigured } from "./crypto-pay";
 
 // Shared, idempotent crediting for automated deposits. Every provider webhook
 // funnels through here: it finds the PENDING deposit by its provider reference,
@@ -119,6 +120,56 @@ export async function reconcilePendingMpesaDeposits(userId: number): Promise<voi
         await rejectPendingDeposit(p.provider_ref, info.desc);
       }
       // "pending" -> leave it; a later load (or the callback) will settle it.
+    } catch {
+      /* best-effort — never block the wallet */
+    }
+  }
+}
+
+/**
+ * Safety net for crypto deposits (mirrors the M-Pesa one): re-queries
+ * NOWPayments for any recent pending crypto deposit and credits the amount that
+ * ACTUALLY arrived on-chain — even if it's below the invoice/minimum — or drops
+ * it if it failed. This guarantees a paid crypto deposit still lands when the
+ * async IPN webhook is missed AND the user has left the page. Idempotent and
+ * best-effort; safe to call on every wallet load.
+ */
+export async function reconcilePendingCryptoDeposits(userId: number): Promise<void> {
+  if (!isCryptoConfigured()) return;
+  const sql = db();
+  const pending = (await sql`
+    SELECT provider_ref, receipt FROM abetrade_transactions
+    WHERE user_id = ${userId}
+      AND type = 'deposit' AND status = 'pending' AND method = 'crypto'
+      AND receipt IS NOT NULL
+      AND created_at > now() - interval '24 hours'
+    ORDER BY created_at DESC
+    LIMIT 5
+  `) as Array<{ provider_ref: string; receipt: string }>;
+
+  for (const p of pending) {
+    try {
+      const info = await getPaymentStatus(p.receipt); // receipt holds the NOWPayments payment_id
+      if (["finished", "confirmed", "partially_paid"].includes(info.status)) {
+        const creditCents =
+          receivedUsdCents({
+            priceAmount: info.priceAmount,
+            payAmount: info.payAmount,
+            actuallyPaid: info.actuallyPaid,
+          }) ?? undefined;
+        // Only credit once there's something actually paid; ignore an empty
+        // partially_paid (0 received) so we don't settle a zero deposit.
+        if (creditCents != null && creditCents > 0) {
+          await creditPendingDeposit(p.provider_ref, {
+            creditCents,
+            receipt: p.receipt,
+            note: "Crypto deposit credited (amount received)",
+          });
+        }
+      } else if (["failed", "expired", "refunded"].includes(info.status)) {
+        await rejectPendingDeposit(p.provider_ref, `Crypto payment ${info.status}`);
+      }
+      // waiting / confirming -> leave pending
     } catch {
       /* best-effort — never block the wallet */
     }

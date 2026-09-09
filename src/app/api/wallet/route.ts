@@ -6,7 +6,7 @@ import { isTestEmail } from "@/lib/testmode";
 import { getGlobalTest } from "@/lib/settings";
 import { referralStats } from "@/lib/referral";
 import { settleExpiredTrades, settleStopOuts } from "@/lib/trades";
-import { reconcilePendingMpesaDeposits } from "@/lib/deposits";
+import { reconcilePendingMpesaDeposits, reconcilePendingCryptoDeposits } from "@/lib/deposits";
 import { isMpesaConfigured, isB2cConfigured, usdKesRate, usdKesWithdrawRate } from "@/lib/mpesa";
 import { isPaystackConfigured } from "@/lib/paystack";
 import { isCryptoConfigured } from "@/lib/crypto-pay";
@@ -30,6 +30,7 @@ export async function GET() {
       settleExpiredTrades(session.id),
       settleStopOuts(session.id),
       reconcilePendingMpesaDeposits(session.id),
+      reconcilePendingCryptoDeposits(session.id),
     ]);
   } catch {
     /* non-fatal */

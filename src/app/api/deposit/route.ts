@@ -164,10 +164,10 @@ export async function POST(req: Request) {
       });
       await sql`
         INSERT INTO abetrade_transactions
-          (user_id, type, amount, status, method, provider_ref, reference, note)
+          (user_id, type, amount, status, method, provider_ref, reference, receipt, note)
         VALUES
           (${session.id}, 'deposit', ${amount}, 'pending', 'crypto', ${orderId},
-           ${payment.payAddress}, ${"Awaiting " + payment.payCurrency.toUpperCase() + " payment"})
+           ${payment.payAddress}, ${payment.paymentId}, ${"Awaiting " + payment.payCurrency.toUpperCase() + " payment"})
       `;
       // QR of the address so users can scan-to-pay (generated locally, no third party).
       let qr: string | null = null;
