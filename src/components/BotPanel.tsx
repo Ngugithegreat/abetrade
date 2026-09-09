@@ -68,7 +68,6 @@ export function BotPanel({
       : ["matches", "differs"];
 
   const [side, setSide] = useState(sides[0]);
-  const [preset, setPreset] = useState<PresetName>("Balanced");
   const [martingale, setMartingale] = useState<string>(PRESETS.Balanced.martingale);
   const [targetProfit, setTargetProfit] = useState<string>(PRESETS.Balanced.targetProfit);
   const [stopLoss, setStopLoss] = useState<string>(PRESETS.Balanced.stopLoss);
@@ -90,15 +89,6 @@ export function BotPanel({
     if (presetSide) setSide(presetSide);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetKey]);
-
-  function applyPreset(name: PresetName) {
-    setPreset(name);
-    const p = PRESETS[name];
-    setMartingale(p.martingale);
-    setTargetProfit(p.targetProfit);
-    setStopLoss(p.stopLoss);
-    setMaxRuns(p.maxRuns);
-  }
 
   async function placeAndSettle(stakeCents: number) {
     const short = marketBySymbol(symbol)?.short ?? symbol;
@@ -254,18 +244,6 @@ export function BotPanel({
             <button key={s} disabled={running} onClick={() => setSide(s)} className={`btn py-2 text-xs ${side === s ? "btn-brand" : "btn-ghost"}`}>
               {s.toUpperCase()}
               {contract === "digit" && subtype !== "even_odd" ? ` ${barrier}` : ""}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Presets */}
-      <div>
-        <label className="mb-1 block text-xs font-medium text-muted">Risk preset</label>
-        <div className="grid grid-cols-3 gap-1.5">
-          {(Object.keys(PRESETS) as PresetName[]).map((name) => (
-            <button key={name} disabled={running} onClick={() => applyPreset(name)} className={`btn py-1.5 text-[11px] ${preset === name ? "btn-brand" : "btn-ghost"}`}>
-              {name}
             </button>
           ))}
         </div>

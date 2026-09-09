@@ -927,21 +927,6 @@ function DigitControls({
         </div>
       )}
 
-      <label className="mb-1 mt-3 block text-xs font-medium text-muted">
-        <Timer className="mr-1 inline h-3.5 w-3.5" /> Ticks
-      </label>
-      <div className="grid grid-cols-5 gap-1.5">
-        {DIGIT_TICKS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setTicks(t)}
-            className={`btn py-1.5 text-xs ${ticks === t ? "btn-brand" : "btn-ghost"}`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
       {!auto && (
       <div className="mt-2.5 grid grid-cols-2 gap-2.5">
         {subtype === "even_odd" && (

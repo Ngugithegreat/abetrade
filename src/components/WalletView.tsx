@@ -37,6 +37,24 @@ const METHOD_DEFS: Record<string, MethodDef> = {
   crypto: { id: "crypto", label: "Crypto", hint: "USDT / BTC & more", icon: Bitcoin },
 };
 
+// ---- Card entry formatting (visual only; the real charge happens on the
+// secure checkout, so no raw card data is transmitted to our backend). ----
+function fmtCardNumber(v: string): string {
+  const digits = v.replace(/\D/g, "").slice(0, 16);
+  return digits.replace(/(.{4})/g, "$1 ").trim();
+}
+function fmtExpiry(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 4);
+  return d.length >= 3 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+}
+function detectBrand(num: string): string {
+  const n = num.replace(/\D/g, "");
+  if (/^4/.test(n)) return "Visa";
+  if (/^(5[1-5]|2[2-7])/.test(n)) return "Mastercard";
+  if (/^3[47]/.test(n)) return "Amex";
+  return "";
+}
+
 // Deposit rails come from the user's country. Withdrawals swap card -> bank.
 function depositMethods(country: string | null | undefined): string[] {
   return railsForCountry(country);
@@ -481,6 +499,10 @@ function MoneyForm({
   const [method, setMethod] = useState(methods[0]?.id ?? "card");
   const [reference, setReference] = useState("");
   const [coin, setCoin] = useState("usdttrc20");
+  // Card details are shown as a familiar inline entry for a normal card-payment
+  // feel. They are NOT sent to our server — the actual charge is completed on the
+  // PCI-compliant secure checkout, which collects the card again safely.
+  const [card, setCard] = useState({ number: "", exp: "", cvc: "", name: "" });
   const [cryptoPay, setCryptoPay] = useState<any | null>(null);
   const [cryptoStatus, setCryptoStatus] = useState<"waiting" | "confirming" | "done" | "failed">("waiting");
   const [stkPay, setStkPay] = useState<{ checkoutRequestId: string; phone: string; amountKes: number } | null>(null);
@@ -751,6 +773,64 @@ function MoneyForm({
           })}
         </div>
       </div>
+
+      {kind === "deposit" && method === "card" && (
+        <div className="space-y-2.5">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Card number</label>
+            <div className="relative">
+              <CreditCard className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <input
+                className="input tabular pl-9 pr-14"
+                inputMode="numeric"
+                autoComplete="cc-number"
+                placeholder="1234 5678 9012 3456"
+                value={card.number}
+                onChange={(e) => setCard((c) => ({ ...c, number: fmtCardNumber(e.target.value) }))}
+              />
+              {detectBrand(card.number) && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-brand">
+                  {detectBrand(card.number)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">Expiry</label>
+              <input
+                className="input tabular"
+                inputMode="numeric"
+                autoComplete="cc-exp"
+                placeholder="MM/YY"
+                value={card.exp}
+                onChange={(e) => setCard((c) => ({ ...c, exp: fmtExpiry(e.target.value) }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">CVC</label>
+              <input
+                className="input tabular"
+                inputMode="numeric"
+                autoComplete="cc-csc"
+                placeholder="123"
+                value={card.cvc}
+                onChange={(e) => setCard((c) => ({ ...c, cvc: e.target.value.replace(/\D/g, "").slice(0, 4) }))}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Name on card</label>
+            <input
+              className="input"
+              autoComplete="cc-name"
+              placeholder="JOHN M DOE"
+              value={card.name}
+              onChange={(e) => setCard((c) => ({ ...c, name: e.target.value.toUpperCase() }))}
+            />
+          </div>
+        </div>
+      )}
 
       {kind === "deposit" && method === "crypto" && gatewayReady && (
         <div>

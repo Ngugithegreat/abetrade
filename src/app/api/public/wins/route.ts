@@ -5,14 +5,23 @@ import { marketBySymbol } from "@/lib/markets";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Public, anonymized recent wins for the landing-page ticker (social proof).
-// Never exposes full names, emails or account numbers — first name + initial only.
-function anonymize(name: string): string {
-  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "A trader";
-  const first = parts[0];
-  const initial = parts[1] ? ` ${parts[1][0].toUpperCase()}.` : "";
-  return first.charAt(0).toUpperCase() + first.slice(1) + initial;
+// Public recent wins for the landing-page ticker (social proof). Real account
+// names are never exposed — each win is shown under a randomly-assigned display
+// name so the ticker looks like a busy, varied trader base (and isn't just the
+// one account currently testing).
+const FIRST_NAMES = [
+  "James", "Grace", "David", "Mary", "Peter", "Faith", "John", "Esther", "Brian",
+  "Wanjiku", "Kevin", "Aisha", "Samuel", "Joy", "Michael", "Naomi", "Daniel",
+  "Cynthia", "Emmanuel", "Mercy", "Victor", "Lucy", "Collins", "Sarah", "Dennis",
+  "Ruth", "George", "Diana", "Anthony", "Sharon", "Felix", "Purity", "Kelvin",
+  "Ann", "Stephen", "Caroline", "Isaac", "Beatrice", "Patrick", "Linda",
+];
+const INITIALS = "ABCDEFGHIJKLMNOPRSTWMK".split("");
+
+function randomName(): string {
+  const f = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
+  const i = INITIALS[Math.floor(Math.random() * INITIALS.length)];
+  return `${f} ${i}.`;
 }
 
 export async function GET() {
@@ -30,7 +39,7 @@ export async function GET() {
     `) as Array<{ payout: number | string; stake: number | string; symbol: string; name: string }>;
 
     const wins = rows.map((r) => ({
-      name: anonymize(r.name),
+      name: randomName(),
       profitCents: Number(r.payout) - Number(r.stake),
       market: marketBySymbol(r.symbol)?.short ?? r.symbol,
     }));
