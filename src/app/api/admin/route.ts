@@ -47,7 +47,16 @@ export async function GET() {
       WHERE type='trade_stake' AND is_demo = false AND created_at > now() - interval '14 days'
       GROUP BY 1 ORDER BY 1
     ` as Promise<any[]>,
+    // Only the newest 100 accounts are aggregated for the default table — the
+    // admin finds anyone else via server-side search (/api/admin/search). The
+    // CTE limits to those 100 users FIRST, so the heavy per-user aggregation
+    // touches 100 rows, not the whole (100k+) user base. This is what stops the
+    // admin dashboard from hanging.
     sql`
+      WITH recent AS (
+        SELECT id, name, email, balance, status, promo, created_at
+        FROM abetrade_users ORDER BY created_at DESC LIMIT 100
+      )
       SELECT u.id, u.name, u.email, u.balance, u.status, u.promo, u.created_at,
         COALESCE(SUM(CASE WHEN t.status='won' THEN t.payout - t.stake
                           WHEN t.status='lost' THEN -t.stake ELSE 0 END),0) AS pnl,
@@ -59,11 +68,10 @@ export async function GET() {
         (SELECT x.method FROM abetrade_transactions x
                    WHERE x.user_id = u.id AND x.type='deposit' AND x.status='completed' AND x.method IS NOT NULL
                    ORDER BY x.created_at DESC LIMIT 1) AS deposit_method
-      FROM abetrade_users u
+      FROM recent u
       LEFT JOIN abetrade_trades t ON t.user_id = u.id AND t.is_demo = false
-      GROUP BY u.id
+      GROUP BY u.id, u.name, u.email, u.balance, u.status, u.promo, u.created_at
       ORDER BY u.created_at DESC
-      LIMIT 5000
     ` as Promise<any[]>,
     sql`
       SELECT id, name, email, kyc_name, kyc_id_number, kyc_phone, kyc_submitted_at

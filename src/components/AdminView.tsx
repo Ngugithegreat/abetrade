@@ -347,7 +347,7 @@ export function AdminView() {
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
           <span className="font-bold">
-            Users &amp; accounts ({q ? `${filteredPlayers.length} found` : players.length})
+            Users &amp; accounts ({q ? `${filteredPlayers.length} found` : `${(k.userCount ?? 0).toLocaleString()} total · newest ${players.length}`})
           </span>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />

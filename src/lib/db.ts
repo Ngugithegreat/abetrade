@@ -42,13 +42,45 @@ function getSql(): NeonQueryFunction<false, false> {
   return _sql;
 }
 
+// Bump whenever the DDL in runMigration() changes so a fresh deploy re-applies
+// it exactly once; every request after that skips the DDL entirely.
+const SCHEMA_VERSION = 1;
+let _migrating: Promise<void> | null = null;
+
 /**
- * Creates tables on first use. Safe to call on every request — it only runs the
- * DDL once per warm serverless instance and the statements are idempotent.
+ * Ensures the schema exists. Safe to call on every request and cheap at scale:
+ *  - once migrated in THIS instance, returns immediately (`_migrated`);
+ *  - concurrent first-callers share ONE run (`_migrating` single-flight) instead
+ *    of each firing ~46 DDL statements at the database;
+ *  - an already-migrated DATABASE is detected with a single version read, so a
+ *    cold start costs one SELECT — not 46 DDL round-trips. This is what keeps
+ *    the DB connection pool from being exhausted under a signup/traffic spike.
  */
 export async function ensureSchema(): Promise<void> {
   if (_migrated) return;
+  if (!_migrating) {
+    _migrating = runMigration().catch((e) => {
+      _migrating = null; // let a later request retry if this run failed
+      throw e;
+    });
+  }
+  return _migrating;
+}
+
+async function runMigration(): Promise<void> {
   const sql = getSql();
+  // Fast path: if the database already reports the current schema version, skip
+  // all the DDL below. Only the first request after a version bump pays for it.
+  try {
+    const r = (await sql`SELECT v FROM abetrade_meta WHERE k = 'schema_version' LIMIT 1`) as Array<{ v: string }>;
+    if (r.length && Number(r[0].v) >= SCHEMA_VERSION) {
+      _migrated = true;
+      return;
+    }
+  } catch {
+    /* meta table doesn't exist yet — fall through and run the full migration */
+  }
+
   await sql`
     CREATE TABLE IF NOT EXISTS abetrade_users (
       id            SERIAL PRIMARY KEY,
@@ -204,6 +236,15 @@ export async function ensureSchema(): Promise<void> {
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_user ON abetrade_transactions(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_trades_user ON abetrade_trades(user_id, created_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS idx_tx_provider ON abetrade_transactions(provider_ref)`;
+  // Speeds up the case-insensitive login/register email lookup and admin search.
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_email_lower ON abetrade_users(lower(email))`;
+
+  // Record the schema version so future cold starts skip all of the above.
+  await sql`CREATE TABLE IF NOT EXISTS abetrade_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)`;
+  await sql`
+    INSERT INTO abetrade_meta (k, v) VALUES ('schema_version', ${String(SCHEMA_VERSION)})
+    ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v
+  `;
   _migrated = true;
 }
 

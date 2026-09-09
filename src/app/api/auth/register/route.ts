@@ -40,8 +40,11 @@ export async function POST(req: Request) {
     const isAdminEmail =
       process.env.ADMIN_EMAIL &&
       cleanEmail === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const countRows = (await sql`SELECT COUNT(*)::int AS n FROM abetrade_users`) as Array<{ n: number }>;
-    const isFirstUser = (countRows[0]?.n ?? 0) === 0;
+    // "Is this the very first account?" — an EXISTS probe (O(1) via the primary
+    // key) instead of COUNT(*) over the whole table, which would scan every row
+    // on every signup and get slower as the user base grows past 100k.
+    const anyUser = (await sql`SELECT 1 FROM abetrade_users LIMIT 1`) as any[];
+    const isFirstUser = anyUser.length === 0;
     const role = isAdminEmail || isFirstUser ? "admin" : "user";
 
     const hash = await hashPassword(String(password));
