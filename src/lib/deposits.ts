@@ -18,7 +18,7 @@ type PendingTx = {
 
 export async function creditPendingDeposit(
   providerRef: string,
-  opts: { expectedCents?: number; receipt?: string | null; note?: string } = {}
+  opts: { creditCents?: number; receipt?: string | null; note?: string } = {}
 ): Promise<{ ok: boolean; reason?: string; credited?: number }> {
   if (!providerRef) return { ok: false, reason: "no_ref" };
   const sql = db();
@@ -31,21 +31,23 @@ export async function creditPendingDeposit(
   if (!rows.length) return { ok: false, reason: "not_found_or_settled" };
 
   const tx = rows[0];
-  const amount = Number(tx.amount);
+  const requested = Number(tx.amount);
 
-  // Guard: never credit more than what was actually paid, when we know it.
-  if (opts.expectedCents != null && opts.expectedCents < amount) {
-    await sql`
-      UPDATE abetrade_transactions
-      SET status = 'rejected', note = ${`Underpaid: got ${opts.expectedCents} of ${amount}`}
-      WHERE id = ${tx.id} AND status = 'pending'
-    `;
-    return { ok: false, reason: "underpaid" };
-  }
+  // Credit the ACTUAL amount received when the provider tells us it (crypto:
+  // network fees mean what arrives is usually less than the invoice; the user
+  // must get what they actually sent — no more, no less). Fiat/M-Pesa pay the
+  // exact amount, so we fall back to the requested amount.
+  let amount =
+    opts.creditCents != null && Number.isFinite(opts.creditCents) && opts.creditCents > 0
+      ? Math.round(opts.creditCents)
+      : requested;
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, reason: "zero_amount" };
 
+  // Atomic claim: also stamp the row's amount to what was truly credited, so the
+  // user's history shows the real figure ($10.50, not the $12 invoice).
   const claimed = (await sql`
     UPDATE abetrade_transactions
-    SET status = 'completed', receipt = ${opts.receipt ?? null}, note = ${
+    SET status = 'completed', amount = ${amount}, receipt = ${opts.receipt ?? null}, note = ${
       opts.note ?? "Deposit confirmed"
     }
     WHERE id = ${tx.id} AND status = 'pending'

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getPaymentStatus } from "@/lib/crypto-pay";
+import { getPaymentStatus, receivedUsdCents } from "@/lib/crypto-pay";
 import { creditPendingDeposit, rejectPendingDeposit } from "@/lib/deposits";
 
 export const runtime = "nodejs";
@@ -31,10 +31,21 @@ export async function GET(req: Request) {
   const orderId = info.orderId;
   let credited = false;
 
-  if (orderId && (info.status === "finished" || info.status === "confirmed")) {
+  if (
+    orderId &&
+    (info.status === "finished" || info.status === "confirmed" || info.status === "partially_paid")
+  ) {
+    // Credit what actually arrived on-chain (fees usually shave a bit off).
+    const creditCents =
+      receivedUsdCents({
+        priceAmount: info.priceAmount,
+        payAmount: info.payAmount,
+        actuallyPaid: info.actuallyPaid,
+      }) ?? undefined;
     const r = await creditPendingDeposit(orderId, {
+      creditCents,
       receipt: paymentId,
-      note: "Crypto deposit confirmed",
+      note: creditCents != null ? "Crypto deposit credited (amount received)" : "Crypto deposit confirmed",
     });
     credited = r.ok;
   } else if (

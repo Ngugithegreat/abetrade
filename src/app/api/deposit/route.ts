@@ -19,7 +19,7 @@ import {
   paystackAmountSubunit,
 } from "@/lib/paystack";
 import QRCode from "qrcode";
-import { isCryptoConfigured, createPayment, isSupportedCoin } from "@/lib/crypto-pay";
+import { isCryptoConfigured, createPayment, isSupportedCoin, CRYPTO_MIN_USD } from "@/lib/crypto-pay";
 import {
   isCollectoConfigured,
   normalizeUgPhone,
@@ -145,6 +145,13 @@ export async function POST(req: Request) {
 
   // ---------- Crypto (NOWPayments invoice) ----------
   if (method === "crypto" && isCryptoConfigured()) {
+    // Small crypto deposits get eaten by network fees, so enforce a floor.
+    if (usd < CRYPTO_MIN_USD) {
+      return NextResponse.json(
+        { error: `Minimum crypto deposit is $${CRYPTO_MIN_USD.toFixed(2)}.` },
+        { status: 400 }
+      );
+    }
     const coin = isSupportedCoin(String(body.coin || "")) ? String(body.coin) : "usdttrc20";
     try {
       const orderId = `atc_${session.id}_${randomUUID().slice(0, 12)}`;

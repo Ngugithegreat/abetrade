@@ -79,6 +79,8 @@ export async function getPaymentStatus(paymentId: string): Promise<{
   status: string;
   orderId: string | null;
   actuallyPaid: number;
+  payAmount: number;
+  priceAmount: number;
 }> {
   const res = await fetch(`${BASE}/payment/${encodeURIComponent(paymentId)}`, {
     headers: { "x-api-key": process.env.NOWPAYMENTS_API_KEY! },
@@ -90,7 +92,29 @@ export async function getPaymentStatus(paymentId: string): Promise<{
     status: String(json.payment_status || ""),
     orderId: json.order_id ? String(json.order_id) : null,
     actuallyPaid: Number(json.actually_paid || 0),
+    payAmount: Number(json.pay_amount || 0),
+    priceAmount: Number(json.price_amount || 0),
   };
+}
+
+// The minimum crypto deposit we accept, in USD. Small crypto deposits are eaten
+// by network fees, so we set a floor and SHOW it to the user. Admin-overridable
+// via NEXT_PUBLIC_CRYPTO_MIN_USD.
+export const CRYPTO_MIN_USD = Number(process.env.NEXT_PUBLIC_CRYPTO_MIN_USD || 20);
+
+// Converts a confirmed NOWPayments payment into the USD CENTS actually received:
+// price_amount (USD) scaled by how much of the expected crypto actually arrived.
+// Works for any coin (a 90%-paid invoice credits 90% of the USD). Returns null
+// when we can't compute it (then callers fall back to the requested amount).
+export function receivedUsdCents(p: {
+  priceAmount: number;
+  payAmount: number;
+  actuallyPaid: number;
+}): number | null {
+  if (p.priceAmount > 0 && p.payAmount > 0 && p.actuallyPaid > 0) {
+    return Math.round(p.priceAmount * (p.actuallyPaid / p.payAmount) * 100);
+  }
+  return null;
 }
 
 export type CryptoInvoice = {

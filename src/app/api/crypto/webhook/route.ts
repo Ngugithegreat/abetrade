@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureSchema } from "@/lib/db";
-import { verifyIpnSignature } from "@/lib/crypto-pay";
+import { verifyIpnSignature, receivedUsdCents } from "@/lib/crypto-pay";
 import { creditPendingDeposit, rejectPendingDeposit } from "@/lib/deposits";
 import { callbackToken } from "@/lib/mpesa";
 
@@ -37,15 +37,26 @@ export async function POST(req: Request) {
 
   await ensureSchema();
 
-  if (status === "finished" || status === "confirmed") {
+  // Credit the amount ACTUALLY received on-chain (network fees mean it's usually
+  // a little under the invoice). `partially_paid` is included on purpose — that's
+  // what NOWPayments reports when fees shaved the amount, and the user must still
+  // be credited for what they sent.
+  if (status === "finished" || status === "confirmed" || status === "partially_paid") {
+    const creditCents =
+      receivedUsdCents({
+        priceAmount: Number(ipn?.price_amount || 0),
+        payAmount: Number(ipn?.pay_amount || 0),
+        actuallyPaid: Number(ipn?.actually_paid || 0),
+      }) ?? undefined;
     await creditPendingDeposit(orderId, {
+      creditCents,
       receipt: ipn?.payment_id ? String(ipn.payment_id) : null,
-      note: "Crypto deposit confirmed",
+      note: creditCents != null ? "Crypto deposit credited (amount received)" : "Crypto deposit confirmed",
     });
   } else if (status === "failed" || status === "expired" || status === "refunded") {
     await rejectPendingDeposit(orderId, `Crypto payment ${status}`);
   }
-  // partially_paid / waiting / confirming -> leave pending
+  // waiting / confirming -> leave pending
 
   return NextResponse.json({ ok: true });
 }

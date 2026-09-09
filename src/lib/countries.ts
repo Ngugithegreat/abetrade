@@ -42,9 +42,11 @@ export type Rail = "mpesa" | "mtn" | "airtel" | "card" | "crypto";
 
 /** Deposit rails available to a user in a given country. */
 export function railsForCountry(code: string | null | undefined): Rail[] {
-  if (code === "KE") return ["mpesa", "card", "crypto"];
-  if (code === "UG") return ["mtn", "airtel", "card", "crypto"];
-  return ["card", "crypto"];
+  // Card removed — the Paystack card/bank rail isn't operational. M-Pesa / mobile
+  // money and crypto are the live rails.
+  if (code === "KE") return ["mpesa", "crypto"];
+  if (code === "UG") return ["mtn", "airtel", "crypto"];
+  return ["crypto"];
 }
 
 export function dialFor(code: string | null | undefined): string {
