@@ -1,70 +1,60 @@
-// SMS via Africa's Talking. Used for signup phone-OTP (Kenya). Configured with
-// AFRICASTALKING_* (or the shorter AT_* aliases the account already uses in
-// Vercel). If no credentials are set, isSmsConfigured() is false and callers
-// skip OTP entirely — so signups are never blocked by a missing SMS setup.
+// SMS via TalkSasa (bulksms.talksasa.com) — the account's live SMS provider.
+// Used for signup phone-OTP (Kenya). Configured with TALKSASA_API_TOKEN (the
+// Bearer token from the dashboard's Developers page). If it's unset,
+// isSmsConfigured() is false and callers skip OTP entirely, so signups are never
+// blocked by a missing SMS setup.
+//
+// API: POST https://bulksms.talksasa.com/api/v3/sms/send
+//   headers: Authorization: Bearer <token>, Accept/Content-Type: application/json
+//   body: { recipient, sender_id, type: "plain", message }
+//   recipient = MSISDN with country code, NO "+" (e.g. 254712345678); comma-
+//   separate for multiple. Response: { status: "success" | "error", ... }.
 
-function env(...names: string[]): string | undefined {
-  for (const n of names) {
-    const v = process.env[n];
-    if (v && v.trim()) return v.trim();
-  }
-  return undefined;
+const API_URL = process.env.TALKSASA_API_URL || "https://bulksms.talksasa.com/api/v3/sms/send";
+
+function apiToken(): string | undefined {
+  const v = process.env.TALKSASA_API_TOKEN;
+  return v && v.trim() ? v.trim() : undefined;
 }
 
-export function smsUsername(): string | undefined {
-  return env("AFRICASTALKING_USERNAME", "AT_USERNAME");
-}
-export function smsApiKey(): string | undefined {
-  return env("AFRICASTALKING_API_KEY", "AT_API_KEY");
-}
-export function smsSenderId(): string | undefined {
-  return env("AFRICASTALKING_SENDER_ID", "AT_SENDER_ID", "AFRICASTALKING_SENDER_ID_KE");
+// Sender ID: alphanumeric, max 11 chars. TalkSasa's default is "TALKSASA".
+export function smsSenderId(): string {
+  return (process.env.TALKSASA_SENDER_ID || "TALKSASA").slice(0, 11);
 }
 
 export function isSmsConfigured(): boolean {
-  return !!(smsUsername() && smsApiKey());
+  return !!apiToken();
 }
 
-function endpoint(): string {
-  // The special username "sandbox" targets AT's sandbox environment.
-  return smsUsername() === "sandbox"
-    ? "https://api.sandbox.africastalking.com/version1/messaging"
-    : "https://api.africastalking.com/version1/messaging";
+// TalkSasa wants the MSISDN with country code and NO leading "+".
+export function toTalksasaNumber(msisdn: string): string {
+  return String(msisdn).replace(/[^\d]/g, "");
 }
 
-// Africa's Talking wants recipients in international format (+2547XXXXXXXX).
-export function toIntlPhone(msisdn: string): string {
-  const digits = String(msisdn).replace(/[^\d]/g, "");
-  return digits.startsWith("+") ? msisdn : `+${digits}`;
-}
-
-/** Sends one SMS. Returns { ok } — throws only on a total transport failure. */
+/** Sends one SMS. Returns { ok } — never throws (transport errors are captured). */
 export async function sendSms(to: string, message: string): Promise<{ ok: boolean; error?: string }> {
-  const username = smsUsername();
-  const apiKey = smsApiKey();
-  if (!username || !apiKey) return { ok: false, error: "SMS not configured." };
-
-  const body = new URLSearchParams({ username, to: toIntlPhone(to), message });
-  const from = smsSenderId();
-  if (from) body.set("from", from);
+  const token = apiToken();
+  if (!token) return { ok: false, error: "SMS not configured." };
 
   try {
-    const res = await fetch(endpoint(), {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: {
-        apiKey,
-        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: body.toString(),
+      body: JSON.stringify({
+        recipient: toTalksasaNumber(to),
+        sender_id: smsSenderId(),
+        type: "plain",
+        message,
+      }),
       cache: "no-store",
     });
     const json = await res.json().catch(() => ({} as any));
-    const recipients = json?.SMSMessageData?.Recipients ?? [];
-    const first = recipients[0];
-    // "Success" (accepted) or "Sent" are both fine; anything else is a failure.
-    if (first && /success|sent/i.test(String(first.status))) return { ok: true };
-    const reason = first?.status || json?.SMSMessageData?.Message || `HTTP ${res.status}`;
+    if (res.ok && String(json?.status).toLowerCase() === "success") return { ok: true };
+    const reason = json?.message || json?.data || `HTTP ${res.status}`;
     return { ok: false, error: String(reason) };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Could not reach the SMS provider." };
