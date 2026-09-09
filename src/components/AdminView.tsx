@@ -56,7 +56,35 @@ export function AdminView() {
   const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userQuery, setUserQuery] = useState("");
+  const [serverUsers, setServerUsers] = useState<Player[] | null>(null);
+  const [searching, setSearching] = useState(false);
   const [kycQuery, setKycQuery] = useState("");
+
+  // Server-side user search. The dashboard preloads only the newest 5000
+  // accounts, so an older account (or any account once there are >5000 users)
+  // can't be found by filtering the loaded list. Debounced query hits the DB so
+  // ANY account is findable by name / email / account number.
+  useEffect(() => {
+    const term = userQuery.trim();
+    if (term.length < 2) {
+      setServerUsers(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/search?q=${encodeURIComponent(term)}`, { cache: "no-store" });
+        const j = await res.json();
+        setServerUsers(Array.isArray(j.users) ? j.users : []);
+      } catch {
+        setServerUsers([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [userQuery]);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/admin", { cache: "no-store" });
@@ -93,7 +121,7 @@ export function AdminView() {
   const k = data.kpi;
   const players: Player[] = data.topUsers || [];
   const q = userQuery.trim().toLowerCase();
-  const filteredPlayers = q
+  const localFiltered = q
     ? players.filter(
         (u) =>
           (u.name || "").toLowerCase().includes(q) ||
@@ -101,6 +129,12 @@ export function AdminView() {
           (u.account_no || "").toLowerCase().includes(q)
       )
     : players;
+  // Merge instant local matches (from the loaded list) with server matches
+  // (which reach accounts beyond the preloaded 5000), de-duplicated by id.
+  const filteredPlayers =
+    q && serverUsers
+      ? Array.from(new Map([...localFiltered, ...serverUsers].map((u) => [u.id, u])).values())
+      : localFiltered;
   const daily = (data.daily || []).map((d: any) => ({
     label: new Date(d.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     volume: d.volume / 100,
@@ -310,7 +344,7 @@ export function AdminView() {
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
           <span className="font-bold">
-            Users &amp; accounts ({q ? `${filteredPlayers.length} of ${players.length}` : players.length})
+            Users &amp; accounts ({q ? `${filteredPlayers.length} found` : players.length})
           </span>
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
@@ -349,7 +383,7 @@ export function AdminView() {
               {filteredPlayers.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted">
-                    {q ? `No users match “${userQuery.trim()}”.` : "No users yet."}
+                    {searching ? "Searching all accounts…" : q ? `No users match “${userQuery.trim()}”.` : "No users yet."}
                   </td>
                 </tr>
               ) : (
