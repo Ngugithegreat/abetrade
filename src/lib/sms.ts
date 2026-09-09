@@ -17,9 +17,10 @@ function apiToken(): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
-// Sender ID: alphanumeric, max 11 chars. TalkSasa's default is "TALKSASA".
+// Sender ID: max 11 chars. The account's ACTIVE registered sender ID is
+// "TALK-SASA" (confirmed on the TalkSasa dashboard), so default to it.
 export function smsSenderId(): string {
-  return (process.env.TALKSASA_SENDER_ID || "TALKSASA").slice(0, 11);
+  return (process.env.TALKSASA_SENDER_ID || "TALK-SASA").slice(0, 11);
 }
 
 export function isSmsConfigured(): boolean {
