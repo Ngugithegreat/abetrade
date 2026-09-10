@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { isSoftwaveConfigured, b2cPayout as swB2cPayout } from "@/lib/softwave";
 import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const automated = method === "mpesa" && isB2cConfigured();
+  const automated = method === "mpesa" && (isSoftwaveConfigured() || isB2cConfigured());
 
   // Validate the phone BEFORE reserving funds for automated payouts.
   let phone: string | null = null;
@@ -159,7 +161,43 @@ export async function POST(req: Request) {
   }
   const balanceAfter = Number(debit[0].balance);
 
-  // ---- Automated M-Pesa payout via B2C ----
+  // ---- Automated M-Pesa payout via SoftWave (preferred PSP) ----
+  if (automated && phone && isSoftwaveConfigured()) {
+    const amountKes = centsToKesWithdraw(amount);
+    const merchantRef = `swp_${session.id}_${randomUUID().slice(0, 12)}`;
+    const sw = await swB2cPayout({ amountKes, phone, reference: merchantRef });
+    if (!sw.ok) {
+      // Rejected at submission (e.g. insufficient float) — refund immediately so
+      // the client is never left debited for a payout that never went out.
+      await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${session.id}`;
+      return NextResponse.json(
+        { error: sw.error || "Could not send the M-Pesa payout. You were not charged." },
+        { status: 502 }
+      );
+    }
+    const rows = (await sql`
+      INSERT INTO abetrade_transactions
+        (user_id, type, amount, status, method, reference, provider_ref, note)
+      VALUES
+        (${session.id}, 'withdrawal', ${-amount}, 'pending', 'mpesa', ${phone},
+         ${sw.data.transaction_id}, ${"B2C sent · SoftWave · KES " + amountKes})
+      RETURNING *
+    `) as any[];
+    {
+      const mail = withdrawalReceiptEmail(session.name, amount / 100, phone);
+      void sendEmail({ to: session.email, subject: mail.subject, html: mail.html, text: mail.text }).catch(() => {});
+    }
+    return NextResponse.json({
+      ok: true,
+      mpesa: true,
+      amountKes,
+      transaction: rows[0],
+      balance: balanceAfter,
+      message: "Withdrawal is being sent to your M-Pesa. It usually arrives within a minute.",
+    });
+  }
+
+  // ---- Automated M-Pesa payout via Daraja B2C (fallback) ----
   if (automated && phone) {
     const amountKes = centsToKesWithdraw(amount);
     try {

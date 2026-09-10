@@ -533,13 +533,17 @@ function MoneyForm({
     }
   }
 
-  // Live STK status — polls Safaricom so the user sees PIN prompt → paid / cancelled.
-  function pollStk(checkoutRequestId: string) {
+  // Live STK status — polls the PSP so the user sees PIN prompt → paid / cancelled.
+  // SoftWave and Daraja return the same {state, desc, credited, balance} shape.
+  function pollStk(checkoutRequestId: string, softwave?: boolean) {
     let n = 0;
     const id = setInterval(async () => {
       n += 1;
       try {
-        const res = await fetch(`/api/mpesa/stk-status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`, {
+        const url = softwave
+          ? `/api/softwave/status?id=${encodeURIComponent(checkoutRequestId)}`
+          : `/api/mpesa/stk-status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`;
+        const res = await fetch(url, {
           cache: "no-store",
         });
         const json = await res.json();
@@ -672,7 +676,7 @@ function MoneyForm({
         if (needsPhone) rememberPhone(reference);
         setStkPay({ checkoutRequestId: json.checkoutRequestId, phone: reference, amountKes: json.amountKes });
         setStkState({ state: "pending", desc: "Sent to your phone — enter your M-Pesa PIN…" });
-        pollStk(json.checkoutRequestId);
+        pollStk(json.checkoutRequestId, json.softwave);
       } else if (json.crypto) {
         // Crypto: show the deposit address and poll until it confirms on-chain.
         setCryptoPay(json.crypto);

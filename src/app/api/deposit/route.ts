@@ -20,6 +20,7 @@ import {
 } from "@/lib/paystack";
 import QRCode from "qrcode";
 import { isCryptoConfigured, createPayment, isSupportedCoin, CRYPTO_MIN_USD } from "@/lib/crypto-pay";
+import { isSoftwaveConfigured, stkPush as swStkPush } from "@/lib/softwave";
 import {
   isCollectoConfigured,
   normalizeUgPhone,
@@ -57,13 +58,47 @@ export async function POST(req: Request) {
   const base = callbackBase(req.url);
   const usd = amount / 100;
 
-  // ---------- M-Pesa (STK Push) — always instant, never manual ----------
+  // ---------- M-Pesa via SoftWave Global (preferred PSP when configured) ----------
+  if (method === "mpesa" && isSoftwaveConfigured()) {
+    const phone = normalizePhone(reference);
+    if (!phone) {
+      return NextResponse.json(
+        { error: "Enter a valid M-Pesa phone number (e.g. 0712345678)." },
+        { status: 400 }
+      );
+    }
+    const amountKes = centsToKes(amount);
+    const merchantRef = `swd_${session.id}_${randomUUID().slice(0, 12)}`;
+    const sw = await swStkPush({ amountKes, phone, reference: merchantRef, description: `${BRAND_NAME} deposit` });
+    if (!sw.ok) {
+      return NextResponse.json({ error: sw.error || "Could not start the M-Pesa prompt. Try again." }, { status: 502 });
+    }
+    const rows = (await sql`
+      INSERT INTO abetrade_transactions
+        (user_id, type, amount, status, method, reference, provider_ref, note)
+      VALUES
+        (${session.id}, 'deposit', ${amount}, 'pending', 'mpesa', ${phone},
+         ${sw.data.transaction_id}, ${"STK sent · SoftWave · KES " + amountKes})
+      RETURNING *
+    `) as any[];
+    return NextResponse.json({
+      ok: true,
+      mpesa: true,
+      softwave: true,
+      amountKes,
+      checkoutRequestId: sw.data.transaction_id,
+      transaction: rows[0],
+      message: "Check your phone and enter your M-Pesa PIN to complete the deposit.",
+    });
+  }
+
+  // ---------- M-Pesa (Daraja STK Push) — fallback when SoftWave isn't set ----------
   if (method === "mpesa") {
     if (!isMpesaConfigured()) {
       return NextResponse.json(
         {
           error:
-            "M-Pesa isn’t available right now. (Admin: set the MPESA_* variables in Vercel and redeploy.)",
+            "M-Pesa isn’t available right now. (Admin: set the SOFTWAVE_API_KEY or MPESA_* variables in Vercel and redeploy.)",
         },
         { status: 503 }
       );
