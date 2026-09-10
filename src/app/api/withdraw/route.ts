@@ -89,19 +89,12 @@ export async function POST(req: Request) {
   // out freely.
   const isTester = !!flow[0]?.is_test || isTestEmail(flow[0]?.email);
 
-  // Must-trade rule: you can't deposit and cash straight back out — you have to
-  // place at least ONE trade first. Any single real trade unlocks withdrawals.
-  if (!isTester && trades < 1) {
-    return NextResponse.json(
-      {
-        error: `Place at least one trade before withdrawing — ${BRAND_NAME} is a trading platform, so open a trade first, then you can withdraw.`,
-      },
-      { status: 403 }
-    );
-  }
+  // NOTE (testing): the must-trade rule and the bonus lock are intentionally
+  // disabled — any account with a balance, including issued bonus, may withdraw
+  // its full amount. (Was: block if trades < 1, and withdrawable = bal - locked.)
 
-  // Withdrawable = balance minus any locked bonus (testers ignore the bonus lock).
-  const withdrawable = Math.max(0, bal - (isTester ? 0 : locked));
+  // Withdrawable = the full balance for everyone (bonus is withdrawable).
+  const withdrawable = Math.max(0, bal);
   if (amount > withdrawable) {
     return NextResponse.json(
       { error: `You can withdraw up to $${(withdrawable / 100).toFixed(2)} right now.` },
@@ -136,22 +129,13 @@ export async function POST(req: Request) {
     }
   }
 
-  // Reserve funds atomically. Race-safe: can't overdraw, and (for real users)
-  // can't withdraw locked bonus. Testers may withdraw their whole balance.
-  const debit = (
-    isTester
-      ? await sql`
-          UPDATE abetrade_users SET balance = balance - ${amount}
-          WHERE id = ${session.id} AND balance >= ${amount}
-          RETURNING balance
-        `
-      : await sql`
-          UPDATE abetrade_users SET balance = balance - ${amount}
-          WHERE id = ${session.id}
-            AND balance - GREATEST(COALESCE(bonus_locked, 0), 0) >= ${amount}
-          RETURNING balance
-        `
-  ) as any[];
+  // Reserve funds atomically. Race-safe: can't overdraw. The full balance
+  // (including any issued bonus) is withdrawable.
+  const debit = (await sql`
+    UPDATE abetrade_users SET balance = balance - ${amount}
+    WHERE id = ${session.id} AND balance >= ${amount}
+    RETURNING balance
+  `) as any[];
 
   if (!debit.length) {
     return NextResponse.json(
