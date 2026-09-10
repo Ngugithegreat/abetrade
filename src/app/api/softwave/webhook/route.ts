@@ -25,8 +25,11 @@ export async function POST(req: Request) {
 
   const event = String(ev?.event || "");
   const txId = ev?.transaction_id ? String(ev.transaction_id) : "";
+  const merchantRef = ev?.merchant_reference ? String(ev.merchant_reference) : "";
   const status = String(ev?.status || "").toUpperCase();
-  if (!txId) return NextResponse.json({ ok: true });
+  if (!txId && !merchantRef) return NextResponse.json({ ok: true });
+  // Payouts are keyed on our merchant_reference; collections on the transaction_id.
+  const payoutKey = merchantRef || txId;
 
   await ensureSchema();
   const sql = db();
@@ -50,7 +53,7 @@ export async function POST(req: Request) {
     await sql`
       UPDATE abetrade_transactions
       SET status = 'completed', note = 'M-Pesa payout completed (SoftWave)'
-      WHERE provider_ref = ${txId} AND type = 'withdrawal' AND status = 'pending'
+      WHERE provider_ref = ${payoutKey} AND type = 'withdrawal' AND status = 'pending'
     `;
     return NextResponse.json({ ok: true });
   }
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
     const rows = (await sql`
       UPDATE abetrade_transactions
       SET status = 'rejected', note = 'M-Pesa payout failed — refunded (SoftWave)'
-      WHERE provider_ref = ${txId} AND type = 'withdrawal' AND status = 'pending'
+      WHERE provider_ref = ${payoutKey} AND type = 'withdrawal' AND status = 'pending'
       RETURNING user_id, amount
     `) as Array<{ user_id: number; amount: string | number }>;
     if (rows.length) {

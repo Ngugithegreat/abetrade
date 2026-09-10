@@ -95,10 +95,15 @@ export function paymentStatus(idOrRef: string): Promise<SwResult<SwPayment>> {
 }
 
 export type SwPayout = {
-  transaction_id: string;
+  uuid?: string;
+  id?: number | string;
+  transaction_id?: string;
+  transaction_reference?: string;
   reference?: string;
   merchant_reference?: string;
   status: string;
+  amount?: string;
+  failure_message?: string | null;
 };
 
 /** Pay out via M-Pesa B2C. SoftWave reserves ledger funds, then submits B2C. */
@@ -121,6 +126,13 @@ export function b2cPayout(opts: {
 
 export function payoutStatus(id: string): Promise<SwResult<SwPayout>> {
   return call<SwPayout>(`/payouts/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+/** Recent payouts (merchant-wide) — used to reconcile our pending withdrawals by
+ * merchant_reference, since GET /payouts/{id} needs SoftWave's uuid (which we
+ * don't keep) while merchant_reference is our own stable key. */
+export function listPayouts(limit = 100): Promise<SwResult<{ items: SwPayout[] }>> {
+  return call<{ items: SwPayout[] }>(`/payouts?limit=${limit}`, { method: "GET" });
 }
 
 /** SoftWave signs webhooks: X-SoftWave-Signature = hex HMAC-SHA256(raw body, secret). */

@@ -4,6 +4,7 @@ import { payReferralOnDeposit } from "./referral";
 import { stkStatus } from "./mpesa";
 import { sendPushToUser } from "./push";
 import { getPaymentStatus, receivedUsdCents, isCryptoConfigured } from "./crypto-pay";
+import { isSoftwaveConfigured, listPayouts } from "./softwave";
 
 // Shared, idempotent crediting for automated deposits. Every provider webhook
 // funnels through here: it finds the PENDING deposit by its provider reference,
@@ -172,6 +173,57 @@ export async function reconcilePendingCryptoDeposits(userId: number): Promise<vo
       // waiting / confirming -> leave pending
     } catch {
       /* best-effort — never block the wallet */
+    }
+  }
+}
+
+/**
+ * Safety net for SoftWave M-Pesa payouts (withdrawals): reconciles our pending
+ * withdrawals against SoftWave's ledger so a completed payout flips to done (and
+ * a failed one is refunded) even if the webhook never lands. We match on OUR
+ * merchant_reference (stored as provider_ref) against SoftWave's recent payouts.
+ * Idempotent and best-effort; safe on every wallet load.
+ */
+export async function reconcilePendingSoftwavePayouts(userId: number): Promise<void> {
+  if (!isSoftwaveConfigured()) return;
+  const sql = db();
+  const pending = (await sql`
+    SELECT id, provider_ref, amount FROM abetrade_transactions
+    WHERE user_id = ${userId} AND type = 'withdrawal' AND status = 'pending' AND method = 'mpesa'
+      AND provider_ref IS NOT NULL
+      AND created_at > now() - interval '3 days'
+    ORDER BY created_at DESC
+    LIMIT 20
+  `) as Array<{ id: number; provider_ref: string; amount: string | number }>;
+  if (!pending.length) return;
+
+  const list = await listPayouts(100);
+  if (!list.ok) return;
+  const byRef = new Map<string, { status: string }>();
+  for (const p of list.data.items || []) {
+    if (p.merchant_reference) byRef.set(String(p.merchant_reference), { status: String(p.status).toUpperCase() });
+  }
+
+  for (const w of pending) {
+    const p = byRef.get(String(w.provider_ref));
+    if (!p) continue;
+    if (p.status === "SUCCESS") {
+      await sql`
+        UPDATE abetrade_transactions
+        SET status = 'completed', note = 'M-Pesa payout completed (SoftWave)'
+        WHERE id = ${w.id} AND status = 'pending'
+      `;
+    } else if (p.status === "FAILED") {
+      const r = (await sql`
+        UPDATE abetrade_transactions
+        SET status = 'rejected', note = 'M-Pesa payout failed — refunded (SoftWave)'
+        WHERE id = ${w.id} AND status = 'pending'
+        RETURNING user_id, amount
+      `) as Array<{ user_id: number; amount: string | number }>;
+      if (r.length) {
+        const refund = Math.abs(Number(r[0].amount));
+        await sql`UPDATE abetrade_users SET balance = balance + ${refund} WHERE id = ${r[0].user_id}`;
+      }
     }
   }
 }

@@ -175,12 +175,15 @@ export async function POST(req: Request) {
         { status: 502 }
       );
     }
+    // Key the withdrawal on OUR merchant_reference — SoftWave echoes it on both
+    // the payout object and the webhook, and (unlike a transaction_id field) it's
+    // guaranteed present. This is what the webhook and the reconcile match on.
     const rows = (await sql`
       INSERT INTO abetrade_transactions
         (user_id, type, amount, status, method, reference, provider_ref, note)
       VALUES
         (${session.id}, 'withdrawal', ${-amount}, 'pending', 'mpesa', ${phone},
-         ${sw.data.transaction_id}, ${"B2C sent · SoftWave · KES " + amountKes})
+         ${merchantRef}, ${"B2C sent · SoftWave · KES " + amountKes})
       RETURNING *
     `) as any[];
     {
