@@ -45,14 +45,14 @@ export async function GET(req: Request) {
     const r = await creditPendingDeposit(orderId, {
       creditCents,
       receipt: paymentId,
-      note: creditCents != null ? "Crypto deposit credited (amount received)" : "Crypto deposit confirmed",
+      note: creditCents != null ? "Wallet top-up credited (amount received)" : "Wallet top-up received",
     });
     credited = r.ok;
   } else if (
     orderId &&
     (info.status === "failed" || info.status === "expired" || info.status === "refunded")
   ) {
-    await rejectPendingDeposit(orderId, `Crypto payment ${info.status}`);
+    await rejectPendingDeposit(orderId, `Payment ${info.status}`);
   }
 
   // Return the freshest balance so the UI updates immediately on credit.

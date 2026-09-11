@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { isSoftwaveConfigured, b2cPayout as swB2cPayout } from "@/lib/softwave";
+import { isTeronaConfigured, createPayout as teronaCreatePayout } from "@/lib/teronapay";
+import { normalizeUgPhone, centsToUgx } from "@/lib/collecto";
 import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
@@ -49,15 +50,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const automated = method === "mpesa" && (isSoftwaveConfigured() || isB2cConfigured());
+  const isUgPayout = method === "mtn" || method === "airtel";
+  const automated =
+    (method === "mpesa" && (isTeronaConfigured() || isB2cConfigured())) ||
+    (isUgPayout && isTeronaConfigured());
 
   // Validate the phone BEFORE reserving funds for automated payouts.
   let phone: string | null = null;
   if (automated) {
-    phone = normalizePhone(rawRef);
+    phone = isUgPayout ? normalizeUgPhone(rawRef) : normalizePhone(rawRef);
     if (!phone) {
       return NextResponse.json(
-        { error: "Enter a valid M-Pesa phone number (e.g. 0712345678)." },
+        { error: isUgPayout ? "Enter a valid Ugandan phone (e.g. 0772123456)." : "Enter a valid M-Pesa phone number (e.g. 0712345678)." },
         { status: 400 }
       );
     }
@@ -145,29 +149,35 @@ export async function POST(req: Request) {
   }
   const balanceAfter = Number(debit[0].balance);
 
-  // ---- Automated M-Pesa payout via SoftWave (preferred PSP) ----
-  if (automated && phone && isSoftwaveConfigured()) {
-    const amountKes = centsToKesWithdraw(amount);
-    const merchantRef = `swp_${session.id}_${randomUUID().slice(0, 12)}`;
-    const sw = await swB2cPayout({ amountKes, phone, reference: merchantRef });
-    if (!sw.ok) {
-      // Rejected at submission (e.g. insufficient float) — refund immediately so
-      // the client is never left debited for a payout that never went out.
+  // ---- Automated payout via TeronaPay (KES → M-Pesa B2C, UGX → mobile money) ----
+  if (automated && phone && isTeronaConfigured()) {
+    const currency = isUgPayout ? "UGX" : "KES";
+    const localAmount = isUgPayout ? centsToUgx(amount) : centsToKesWithdraw(amount);
+    const idem = `wdl_${session.id}_${randomUUID().slice(0, 12)}`;
+    const tp = await teronaCreatePayout({
+      amount: localAmount,
+      currency,
+      destinationPhone: `+${phone}`,
+      remarks: `${BRAND_NAME} payout`,
+      idempotencyKey: idem,
+    });
+    if (!tp.ok) {
+      // Rejected at submission (e.g. low float) — refund immediately so the
+      // client is never left debited for a payout that never went out.
       await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${session.id}`;
       return NextResponse.json(
-        { error: sw.error || "Could not send the M-Pesa payout. You were not charged." },
+        { error: tp.error || "Could not send the payout. You were not charged." },
         { status: 502 }
       );
     }
-    // Key the withdrawal on OUR merchant_reference — SoftWave echoes it on both
-    // the payout object and the webhook, and (unlike a transaction_id field) it's
-    // guaranteed present. This is what the webhook and the reconcile match on.
+    // Key the withdrawal on TeronaPay's payout id — present on the payout object
+    // and the webhook, and used by both the webhook and the reconcile.
     const rows = (await sql`
       INSERT INTO abetrade_transactions
         (user_id, type, amount, status, method, reference, provider_ref, note)
       VALUES
-        (${session.id}, 'withdrawal', ${-amount}, 'pending', 'mpesa', ${phone},
-         ${merchantRef}, ${"B2C sent · SoftWave · KES " + amountKes})
+        (${session.id}, 'withdrawal', ${-amount}, 'pending', ${method}, ${phone},
+         ${tp.data.id}, ${`${BRAND_NAME} payout · ${currency} ${localAmount}`})
       RETURNING *
     `) as any[];
     {
@@ -177,10 +187,10 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       mpesa: true,
-      amountKes,
+      amountKes: localAmount,
       transaction: rows[0],
       balance: balanceAfter,
-      message: "Withdrawal is being sent to your M-Pesa. It usually arrives within a minute.",
+      message: "Withdrawal is being sent to your phone. It usually arrives within a minute.",
     });
   }
 

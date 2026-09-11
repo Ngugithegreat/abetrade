@@ -51,10 +51,10 @@ export async function POST(req: Request) {
     await creditPendingDeposit(orderId, {
       creditCents,
       receipt: ipn?.payment_id ? String(ipn.payment_id) : null,
-      note: creditCents != null ? "Crypto deposit credited (amount received)" : "Crypto deposit confirmed",
+      note: creditCents != null ? "Wallet top-up credited (amount received)" : "Wallet top-up received",
     });
   } else if (status === "failed" || status === "expired" || status === "refunded") {
-    await rejectPendingDeposit(orderId, `Crypto payment ${status}`);
+    await rejectPendingDeposit(orderId, `Payment ${status}`);
   }
   // waiting / confirming -> leave pending
 

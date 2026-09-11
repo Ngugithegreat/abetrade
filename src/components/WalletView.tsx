@@ -22,7 +22,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useApp, Txn } from "./app-context";
-import { money, shortTime } from "@/lib/format";
+import { money, shortTime, txnLabel, methodLabel } from "@/lib/format";
 import { railsForCountry } from "@/lib/countries";
 import { ListSkeleton } from "./Skeleton";
 import { NotificationToggle } from "./NotificationToggle";
@@ -35,7 +35,7 @@ const METHOD_DEFS: Record<string, MethodDef> = {
   airtel: { id: "airtel", label: "Airtel", hint: "Phone e.g. 0752123456", icon: Smartphone },
   card: { id: "card", label: "Card", hint: "", icon: CreditCard },
   bank: { id: "bank", label: "Bank", hint: "Account number / name", icon: Landmark },
-  crypto: { id: "crypto", label: "Crypto", hint: "USDT / BTC & more", icon: Bitcoin },
+  crypto: { id: "crypto", label: "USDT", hint: "USDT / BTC & more", icon: Bitcoin },
 };
 
 // Minimum crypto deposit in USD (mirrors the server's CRYPTO_MIN_USD). Small
@@ -534,14 +534,14 @@ function MoneyForm({
   }
 
   // Live STK status — polls the PSP so the user sees PIN prompt → paid / cancelled.
-  // SoftWave and Daraja return the same {state, desc, credited, balance} shape.
-  function pollStk(checkoutRequestId: string, softwave?: boolean) {
+  // TeronaPay and Daraja return the same {state, desc, credited, balance} shape.
+  function pollStk(checkoutRequestId: string, terona?: boolean) {
     let n = 0;
     const id = setInterval(async () => {
       n += 1;
       try {
-        const url = softwave
-          ? `/api/softwave/status?id=${encodeURIComponent(checkoutRequestId)}`
+        const url = terona
+          ? `/api/teronapay/status?id=${encodeURIComponent(checkoutRequestId)}`
           : `/api/mpesa/stk-status?checkoutRequestId=${encodeURIComponent(checkoutRequestId)}`;
         const res = await fetch(url, {
           cache: "no-store",
@@ -676,7 +676,7 @@ function MoneyForm({
         if (needsPhone) rememberPhone(reference);
         setStkPay({ checkoutRequestId: json.checkoutRequestId, phone: reference, amountKes: json.amountKes });
         setStkState({ state: "pending", desc: "Sent to your phone — enter your M-Pesa PIN…" });
-        pollStk(json.checkoutRequestId, json.softwave);
+        pollStk(json.checkoutRequestId, json.terona);
       } else if (json.crypto) {
         // Crypto: show the deposit address and poll until it confirms on-chain.
         setCryptoPay(json.crypto);
@@ -906,10 +906,10 @@ function TxnList({ txns }: { txns: Txn[] }) {
             <div className="flex items-center gap-3">
               <TxnIcon type={t.type} />
               <div>
-                <div className="text-sm font-medium capitalize">
-                  {t.type === "bonus" ? "Deposit" : t.type.replace("_", " ")}
+                <div className="text-sm font-medium">
+                  {txnLabel(t.type)}
                   {t.method && t.type !== "bonus" ? (
-                    <span className="text-muted"> · {t.method}</span>
+                    <span className="text-muted"> · {methodLabel(t.method)}</span>
                   ) : null}
                 </div>
                 <div className="text-[11px] text-muted">{shortTime(t.created_at)}</div>
