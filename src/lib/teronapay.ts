@@ -26,16 +26,29 @@ function authHeader(): string {
   return "Basic " + Buffer.from(`${id}:${secret}`).toString("base64");
 }
 
+// The API key can act on several business accounts (one per currency); each
+// request targets one via the X-Account-No header. Defaults are this merchant's
+// account numbers; override per currency with TERONAPAY_ACCOUNT_<CUR>.
+const ACCOUNTS: Record<string, string> = {
+  KES: (process.env.TERONAPAY_ACCOUNT_KES || "TER5D36C450D5").trim(),
+  UGX: (process.env.TERONAPAY_ACCOUNT_UGX || "TER137B6ED9B1").trim(),
+  TZS: (process.env.TERONAPAY_ACCOUNT_TZS || "TER751E3FF5BC").trim(),
+};
+function accountFor(currency: string): string | undefined {
+  return ACCOUNTS[String(currency).toUpperCase()] || undefined;
+}
+
 type TResult<T> = { ok: true; data: T } | { ok: false; code?: string; error: string };
 
 async function call<T = any>(
   path: string,
-  init: { method: "GET" | "POST"; body?: unknown; idempotencyKey?: string }
+  init: { method: "GET" | "POST"; body?: unknown; idempotencyKey?: string; accountNo?: string }
 ): Promise<TResult<T>> {
   if (!isTeronaConfigured()) return { ok: false, error: "Payments not configured." };
   const headers: Record<string, string> = { Authorization: authHeader(), Accept: "application/json" };
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
   if (init.idempotencyKey) headers["Idempotency-Key"] = init.idempotencyKey;
+  if (init.accountNo) headers["X-Account-No"] = init.accountNo;
   try {
     const res = await fetch(`${BASE}${path}`, {
       method: init.method,
@@ -74,6 +87,7 @@ export function createPayment(opts: {
   return call<TPayment>("/v1/payments", {
     method: "POST",
     idempotencyKey: opts.reference,
+    accountNo: accountFor(opts.currency),
     body: {
       reference: opts.reference,
       amount: opts.amount,
@@ -113,6 +127,7 @@ export function createPayout(opts: {
   return call<TPayout>("/v1/payouts", {
     method: "POST",
     idempotencyKey: opts.idempotencyKey,
+    accountNo: accountFor(opts.currency),
     body: {
       amount: opts.amount,
       currency: opts.currency,
