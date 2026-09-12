@@ -261,6 +261,94 @@ export async function reconcilePendingTeronaDeposits(userId: number): Promise<vo
   }
 }
 
+/**
+ * GLOBAL reconcile (for the cron): scans every recent pending TeronaPay payout
+ * across ALL users and settles it — refunding failed ones and completing paid
+ * ones — WITHOUT needing the client to load the wallet. This is what guarantees
+ * a failed withdrawal is refunded hands-off (the per-user version only runs when
+ * that user opens their wallet). Idempotent and best-effort.
+ */
+export async function reconcileAllPendingTeronaPayouts(
+  limit = 300
+): Promise<{ checked: number; refunded: number; completed: number }> {
+  if (!isTeronaConfigured()) return { checked: 0, refunded: 0, completed: 0 };
+  const sql = db();
+  const pending = (await sql`
+    SELECT id, user_id, provider_ref, amount, method FROM abetrade_transactions
+    WHERE type = 'withdrawal' AND status = 'pending'
+      AND method IN ('mpesa','mtn','airtel','tzmobile') AND provider_ref IS NOT NULL
+      AND created_at > now() - interval '3 days'
+    ORDER BY created_at ASC
+    LIMIT ${limit}
+  `) as Array<{ id: number; user_id: number; provider_ref: string; amount: string | number; method: string }>;
+
+  let refunded = 0;
+  let completed = 0;
+  for (const w of pending) {
+    try {
+      const tp = await getPayout(w.provider_ref, currencyForMethod(w.method));
+      if (!tp.ok) continue;
+      if (isPaid(tp.data.status)) {
+        const r = (await sql`
+          UPDATE abetrade_transactions SET status = 'completed', note = 'Payout completed'
+          WHERE id = ${w.id} AND status = 'pending' RETURNING id
+        `) as Array<{ id: number }>;
+        if (r.length) completed++;
+      } else if (isFailed(tp.data.status)) {
+        const r = (await sql`
+          UPDATE abetrade_transactions SET status = 'rejected', note = 'Payout failed — refunded'
+          WHERE id = ${w.id} AND status = 'pending' RETURNING user_id, amount
+        `) as Array<{ user_id: number; amount: string | number }>;
+        if (r.length) {
+          const refund = Math.abs(Number(r[0].amount));
+          await sql`UPDATE abetrade_users SET balance = balance + ${refund} WHERE id = ${r[0].user_id}`;
+          refunded++;
+        }
+      }
+      // still pending on TeronaPay -> leave it (money may yet go out)
+    } catch {
+      /* best-effort */
+    }
+  }
+  return { checked: pending.length, refunded, completed };
+}
+
+/** GLOBAL reconcile of pending TeronaPay deposits (mirrors the payout version). */
+export async function reconcileAllPendingTeronaDeposits(
+  limit = 300
+): Promise<{ checked: number; credited: number }> {
+  if (!isTeronaConfigured()) return { checked: 0, credited: 0 };
+  const sql = db();
+  const pending = (await sql`
+    SELECT provider_ref, method FROM abetrade_transactions
+    WHERE type = 'deposit' AND status = 'pending'
+      AND method IN ('mpesa','mtn','airtel','tzmobile') AND provider_ref IS NOT NULL
+      AND created_at > now() - interval '2 hours'
+    ORDER BY created_at ASC
+    LIMIT ${limit}
+  `) as Array<{ provider_ref: string; method: string }>;
+
+  let credited = 0;
+  for (const d of pending) {
+    try {
+      const tp = await getPayment(d.provider_ref, currencyForMethod(d.method));
+      if (!tp.ok) continue;
+      if (isPaid(tp.data.status)) {
+        const r = await creditPendingDeposit(d.provider_ref, {
+          receipt: tp.data.channel_receipt || tp.data.id,
+          note: "Wallet top-up received",
+        });
+        if (r.ok) credited++;
+      } else if (isFailed(tp.data.status)) {
+        await rejectPendingDeposit(d.provider_ref, "Payment failed");
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
+  return { checked: pending.length, credited };
+}
+
 export async function rejectPendingDeposit(
   providerRef: string,
   _note = "Payment failed"
