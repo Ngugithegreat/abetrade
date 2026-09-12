@@ -145,6 +145,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, promo: value });
   }
 
+  // Block/allow withdrawals for one account (can still trade & do everything
+  // else). Blocked accounts' withdrawals are held in "processing" and never sent.
+  if (action === "toggle_withdraw_block") {
+    const userId = Number(body.userId);
+    const value = !!body.value;
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: "Bad user." }, { status: 400 });
+    }
+    await sql`UPDATE abetrade_users SET withdraw_blocked = ${value} WHERE id = ${userId}`;
+    return NextResponse.json({ ok: true, withdraw_blocked: value });
+  }
+
   if (action === "grant_bonus") {
     const userId = Number(body.userId);
     const usd = Number(body.amount);

