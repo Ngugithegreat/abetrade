@@ -108,9 +108,9 @@ export function WalletView() {
   }, [refresh]);
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-4 lg:h-full">
       {/* Balance banner */}
-      <div className={`card relative overflow-hidden p-6 ${demo ? "border-gold/40" : ""}`}>
+      <div className={`card relative shrink-0 overflow-hidden p-5 ${demo ? "border-gold/40" : ""}`}>
         <div className={`pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full blur-3xl ${demo ? "bg-gold/20" : "bg-brand/20"}`} />
         <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted">
           {demo ? "Demo balance" : "Available balance"}
@@ -142,12 +142,12 @@ export function WalletView() {
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[380px_1fr]">
+      <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[380px_1fr]">
         {/* Money form (real) / Demo panel */}
         {demo ? (
           <DemoPanel onDone={(bal) => setBalance(bal)} refresh={refresh} />
         ) : (
-          <div className="card p-5">
+          <div className="card overflow-y-auto p-5 lg:min-h-0 lg:max-h-full">
             <div className="mb-4 grid grid-cols-2 gap-2">
               <button
                 onClick={() => setTab("deposit")}
@@ -197,15 +197,17 @@ export function WalletView() {
         )}
 
         {/* Transactions — scoped to the active account */}
-        <div className="card overflow-hidden">
-          <div className="border-b border-border px-5 py-3 font-bold">
+        <div className="card flex min-h-0 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-border px-5 py-3 font-bold">
             Recent activity
           </div>
-          {loading && !data ? (
-            <ListSkeleton rows={5} />
-          ) : (
-            <TxnList txns={(data?.transactions ?? []).filter((t) => !!t.is_demo === demo)} />
-          )}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {loading && !data ? (
+              <ListSkeleton rows={5} />
+            ) : (
+              <TxnList txns={(data?.transactions ?? []).filter((t) => !!t.is_demo === demo)} />
+            )}
+          </div>
         </div>
       </div>
 
