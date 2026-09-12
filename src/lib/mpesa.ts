@@ -344,6 +344,64 @@ export async function b2cPayment(opts: {
   });
 }
 
+// Diagnostic: reports which B2C credential is (or isn't) working, WITHOUT
+// exposing any secret value. Tests the OAuth token (consumer key/secret), shows
+// the resolved environment, and flags a security credential that looks like a
+// plaintext password rather than the encrypted credential.
+export async function b2cDiagnostics(): Promise<any> {
+  const key = b2cVal("CONSUMER_KEY");
+  const secret = b2cVal("CONSUMER_SECRET");
+  const initiator = b2cVal("INITIATOR_NAME");
+  const sec = b2cVal("SECURITY_CREDENTIAL");
+  const shortcode = b2cVal("SHORTCODE");
+  const out: any = {
+    configured: isB2cConfigured(),
+    resolvedEnv: b2cIsProduction() ? "production" : "sandbox",
+    baseUrl: b2cBase(),
+    // Non-secret values — safe to echo so you can eyeball them:
+    initiatorName: initiator || null,
+    shortcode: shortcode || null,
+    command: process.env.MPESA_B2C_COMMAND || "BusinessPayment",
+    present: {
+      consumerKey: !!key,
+      consumerSecret: !!secret,
+      initiatorName: !!initiator,
+      securityCredential: !!sec,
+      shortcode: !!shortcode,
+    },
+    lengths: {
+      consumerKey: key.length,
+      consumerSecret: secret.length,
+      securityCredential: sec.length,
+    },
+    // An ENCRYPTED security credential is a long Base64 string (~344+ chars).
+    // A short value here means the raw password was pasted instead — a common bug.
+    securityCredentialLooksEncrypted: sec.length > 200,
+    usingSharedMpesaFallback: {
+      consumerKey: !process.env.MPESA_B2C_CONSUMER_KEY && !!process.env.MPESA_CONSUMER_KEY,
+      consumerSecret: !process.env.MPESA_B2C_CONSUMER_SECRET && !!process.env.MPESA_CONSUMER_SECRET,
+      initiatorName: !process.env.MPESA_B2C_INITIATOR_NAME && !!process.env.MPESA_INITIATOR_NAME,
+      securityCredential: !process.env.MPESA_B2C_SECURITY_CREDENTIAL && !!process.env.MPESA_SECURITY_CREDENTIAL,
+      shortcode: !process.env.MPESA_B2C_SHORTCODE && !!process.env.MPESA_SHORTCODE,
+    },
+  };
+  try {
+    const res = await fetch(`${b2cBase()}/oauth/v1/generate?grant_type=client_credentials`, {
+      headers: { Authorization: `Basic ${b64(`${key}:${secret}`)}` },
+      cache: "no-store",
+    });
+    const j: any = await res.json().catch(() => ({}));
+    out.oauthTest = {
+      httpStatus: res.status,
+      ok: res.ok && !!j.access_token,
+      error: res.ok ? null : j.errorMessage || j.error_description || `HTTP ${res.status}`,
+    };
+  } catch (e: any) {
+    out.oauthTest = { ok: false, error: e?.message || "network error" };
+  }
+  return out;
+}
+
 /**
  * Public base URL for building callback URLs. Prefer an explicit stable domain;
  * fall back to the Vercel deployment URL, then the request origin.
