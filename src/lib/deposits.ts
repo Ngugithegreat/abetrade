@@ -18,6 +18,15 @@ type PendingTx = {
   status: string;
 };
 
+// Map a payment method to the TeronaPay currency wallet it was created under, so
+// status lookups (getPayment/getPayout) send the right X-Account-No.
+function currencyForMethod(method: string): string {
+  const m = String(method).toLowerCase();
+  if (m === "mtn" || m === "airtel") return "UGX";
+  if (m === "tzmobile") return "TZS";
+  return "KES"; // mpesa
+}
+
 export async function creditPendingDeposit(
   providerRef: string,
   opts: { creditCents?: number; receipt?: string | null; note?: string } = {}
@@ -187,17 +196,17 @@ export async function reconcilePendingTeronaPayouts(userId: number): Promise<voi
   if (!isTeronaConfigured()) return;
   const sql = db();
   const pending = (await sql`
-    SELECT id, provider_ref, amount FROM abetrade_transactions
+    SELECT id, provider_ref, amount, method FROM abetrade_transactions
     WHERE user_id = ${userId} AND type = 'withdrawal' AND status = 'pending'
       AND method IN ('mpesa','mtn','airtel','tzmobile') AND provider_ref IS NOT NULL
       AND created_at > now() - interval '3 days'
     ORDER BY created_at DESC
     LIMIT 10
-  `) as Array<{ id: number; provider_ref: string; amount: string | number }>;
+  `) as Array<{ id: number; provider_ref: string; amount: string | number; method: string }>;
 
   for (const w of pending) {
     try {
-      const tp = await getPayout(w.provider_ref);
+      const tp = await getPayout(w.provider_ref, currencyForMethod(w.method));
       if (!tp.ok) continue;
       if (isPaid(tp.data.status)) {
         await sql`UPDATE abetrade_transactions SET status = 'completed', note = 'Payout completed' WHERE id = ${w.id} AND status = 'pending'`;
@@ -226,17 +235,17 @@ export async function reconcilePendingTeronaDeposits(userId: number): Promise<vo
   if (!isTeronaConfigured()) return;
   const sql = db();
   const pending = (await sql`
-    SELECT provider_ref FROM abetrade_transactions
+    SELECT provider_ref, method FROM abetrade_transactions
     WHERE user_id = ${userId} AND type = 'deposit' AND status = 'pending'
       AND method IN ('mpesa','mtn','airtel','tzmobile') AND provider_ref IS NOT NULL
       AND created_at > now() - interval '1 hour'
     ORDER BY created_at DESC
     LIMIT 5
-  `) as Array<{ provider_ref: string }>;
+  `) as Array<{ provider_ref: string; method: string }>;
 
   for (const d of pending) {
     try {
-      const tp = await getPayment(d.provider_ref);
+      const tp = await getPayment(d.provider_ref, currencyForMethod(d.method));
       if (!tp.ok) continue;
       if (isPaid(tp.data.status)) {
         await creditPendingDeposit(d.provider_ref, {
