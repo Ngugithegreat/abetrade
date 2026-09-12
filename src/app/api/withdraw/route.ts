@@ -150,8 +150,15 @@ export async function POST(req: Request) {
   }
   const balanceAfter = Number(debit[0].balance);
 
-  // ---- Automated payout via TeronaPay (KES → M-Pesa B2C, UGX → mobile money) ----
-  if (automated && phone && isTeronaConfigured()) {
+  // ---- Automated payout via TeronaPay (UGX/TZS mobile money, and KES only when
+  // no dedicated M-Pesa B2C paybill is set). When MPESA_B2C_* is configured, KES
+  // withdrawals are sent via Daraja B2C below instead (TeronaPay payouts unstable).
+  if (
+    automated &&
+    phone &&
+    isTeronaConfigured() &&
+    !(method === "mpesa" && isB2cConfigured())
+  ) {
     const currency = isTzPayout ? "TZS" : isUgPayout ? "UGX" : "KES";
     const localAmount = isTzPayout ? centsToTzs(amount) : isUgPayout ? centsToUgx(amount) : centsToKesWithdraw(amount);
     const idem = `wdl_${session.id}_${randomUUID().slice(0, 12)}`;
