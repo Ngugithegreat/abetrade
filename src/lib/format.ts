@@ -63,6 +63,7 @@ export function methodLabel(method: string | null | undefined): string {
     mpesa: "M-Pesa",
     mtn: "MTN",
     airtel: "Airtel",
+    tzmobile: "Mobile Money",
     crypto: "USDT",
     card: "Card",
     bank: "Bank",

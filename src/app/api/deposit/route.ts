@@ -25,6 +25,8 @@ import {
   isCollectoConfigured,
   normalizeUgPhone,
   centsToUgx,
+  normalizeTzPhone,
+  centsToTzs,
   requestToPay,
 } from "@/lib/collecto";
 
@@ -291,6 +293,51 @@ export async function POST(req: Request) {
       checkoutRequestId: tp.data.id,
       transaction: rows[0],
       message: `Check your phone and approve the ${method.toUpperCase()} prompt to complete.`,
+    });
+  }
+
+  // ---------- Tanzania mobile money via TeronaPay (TZS) ----------
+  if (method === "tzmobile" && isTeronaConfigured()) {
+    const phone = normalizeTzPhone(reference);
+    if (!phone) {
+      return NextResponse.json({ error: "Enter a valid Tanzanian phone (e.g. 0712345678)." }, { status: 400 });
+    }
+    const recent = (await sql`
+      SELECT 1 FROM abetrade_transactions
+      WHERE user_id = ${session.id} AND type = 'deposit' AND method = 'tzmobile'
+        AND status != 'rejected' AND created_at > now() - interval '5 minutes' LIMIT 1
+    `) as any[];
+    if (recent.length) {
+      return NextResponse.json({ error: "Please wait a few minutes before requesting another prompt." }, { status: 429 });
+    }
+    const amountTzs = centsToTzs(amount);
+    const ref = `dep_${session.id}_${randomUUID().slice(0, 12)}`;
+    const tp = await teronaCreatePayment({
+      reference: ref,
+      amount: amountTzs,
+      currency: "TZS",
+      channel: "mobile_money",
+      payerPhone: `+${phone}`,
+    });
+    if (!tp.ok) {
+      return NextResponse.json({ error: tp.error || "Could not start the prompt. Try again." }, { status: 502 });
+    }
+    const rows = (await sql`
+      INSERT INTO abetrade_transactions
+        (user_id, type, amount, status, method, reference, provider_ref, note)
+      VALUES
+        (${session.id}, 'deposit', ${amount}, 'pending', 'tzmobile', ${phone}, ${tp.data.id},
+         ${`${BRAND_NAME} wallet top-up · TZS ${amountTzs}`})
+      RETURNING *
+    `) as any[];
+    return NextResponse.json({
+      ok: true,
+      mpesa: true,
+      terona: true,
+      amountKes: amountTzs,
+      checkoutRequestId: tp.data.id,
+      transaction: rows[0],
+      message: "Check your phone and approve the mobile-money prompt to complete.",
     });
   }
 

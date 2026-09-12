@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { isTeronaConfigured, createPayout as teronaCreatePayout } from "@/lib/teronapay";
-import { normalizeUgPhone, centsToUgx } from "@/lib/collecto";
+import { normalizeUgPhone, centsToUgx, normalizeTzPhone, centsToTzs } from "@/lib/collecto";
 import { isBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
 import { cents } from "@/lib/format";
@@ -51,17 +51,18 @@ export async function POST(req: Request) {
   }
 
   const isUgPayout = method === "mtn" || method === "airtel";
+  const isTzPayout = method === "tzmobile";
   const automated =
     (method === "mpesa" && (isTeronaConfigured() || isB2cConfigured())) ||
-    (isUgPayout && isTeronaConfigured());
+    ((isUgPayout || isTzPayout) && isTeronaConfigured());
 
   // Validate the phone BEFORE reserving funds for automated payouts.
   let phone: string | null = null;
   if (automated) {
-    phone = isUgPayout ? normalizeUgPhone(rawRef) : normalizePhone(rawRef);
+    phone = isTzPayout ? normalizeTzPhone(rawRef) : isUgPayout ? normalizeUgPhone(rawRef) : normalizePhone(rawRef);
     if (!phone) {
       return NextResponse.json(
-        { error: isUgPayout ? "Enter a valid Ugandan phone (e.g. 0772123456)." : "Enter a valid M-Pesa phone number (e.g. 0712345678)." },
+        { error: isTzPayout ? "Enter a valid Tanzanian phone (e.g. 0712345678)." : isUgPayout ? "Enter a valid Ugandan phone (e.g. 0772123456)." : "Enter a valid M-Pesa phone number (e.g. 0712345678)." },
         { status: 400 }
       );
     }
@@ -151,8 +152,8 @@ export async function POST(req: Request) {
 
   // ---- Automated payout via TeronaPay (KES → M-Pesa B2C, UGX → mobile money) ----
   if (automated && phone && isTeronaConfigured()) {
-    const currency = isUgPayout ? "UGX" : "KES";
-    const localAmount = isUgPayout ? centsToUgx(amount) : centsToKesWithdraw(amount);
+    const currency = isTzPayout ? "TZS" : isUgPayout ? "UGX" : "KES";
+    const localAmount = isTzPayout ? centsToTzs(amount) : isUgPayout ? centsToUgx(amount) : centsToKesWithdraw(amount);
     const idem = `wdl_${session.id}_${randomUUID().slice(0, 12)}`;
     const tp = await teronaCreatePayout({
       amount: localAmount,

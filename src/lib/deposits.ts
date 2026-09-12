@@ -189,7 +189,7 @@ export async function reconcilePendingTeronaPayouts(userId: number): Promise<voi
   const pending = (await sql`
     SELECT id, provider_ref, amount FROM abetrade_transactions
     WHERE user_id = ${userId} AND type = 'withdrawal' AND status = 'pending'
-      AND method IN ('mpesa','mtn','airtel') AND provider_ref IS NOT NULL
+      AND method IN ('mpesa','mtn','airtel','tzmobile') AND provider_ref IS NOT NULL
       AND created_at > now() - interval '3 days'
     ORDER BY created_at DESC
     LIMIT 10
@@ -228,7 +228,7 @@ export async function reconcilePendingTeronaDeposits(userId: number): Promise<vo
   const pending = (await sql`
     SELECT provider_ref FROM abetrade_transactions
     WHERE user_id = ${userId} AND type = 'deposit' AND status = 'pending'
-      AND method IN ('mpesa','mtn','airtel') AND provider_ref IS NOT NULL
+      AND method IN ('mpesa','mtn','airtel','tzmobile') AND provider_ref IS NOT NULL
       AND created_at > now() - interval '1 hour'
     ORDER BY created_at DESC
     LIMIT 5

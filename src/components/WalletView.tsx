@@ -33,6 +33,7 @@ const METHOD_DEFS: Record<string, MethodDef> = {
   mpesa: { id: "mpesa", label: "M-Pesa", hint: "Phone e.g. 0712345678", icon: Smartphone },
   mtn: { id: "mtn", label: "MTN", hint: "Phone e.g. 0772123456", icon: Smartphone },
   airtel: { id: "airtel", label: "Airtel", hint: "Phone e.g. 0752123456", icon: Smartphone },
+  tzmobile: { id: "tzmobile", label: "Mobile Money", hint: "Phone e.g. 0712345678", icon: Smartphone },
   card: { id: "card", label: "Card", hint: "", icon: CreditCard },
   bank: { id: "bank", label: "Bank", hint: "Account number / name", icon: Landmark },
   crypto: { id: "crypto", label: "USDT", hint: "USDT / BTC & more", icon: Bitcoin },
@@ -505,7 +506,8 @@ function MoneyForm({
   const amountNum = Number(amount) || 0;
   const isMpesa = method === "mpesa";
   const isUgMobile = method === "mtn" || method === "airtel";
-  const needsPhone = isMpesa || isUgMobile;
+  const isTzMobile = method === "tzmobile";
+  const needsPhone = isMpesa || isUgMobile || isTzMobile;
   const automated =
     (isMpesa && mpesaAutomated) || (isUgMobile && !!config?.ugMobileDeposit);
   const kes = Math.max(0, Math.round(amountNum * rate));
@@ -842,6 +844,8 @@ function MoneyForm({
           <span className="tabular font-bold text-brand">
             {isMpesa
               ? `KES ${kes.toLocaleString("en-US")}`
+              : isTzMobile
+              ? `TZS ${Math.max(1000, Math.round(amountNum * (Number((config as any)?.usdTzsRate) || 2600))).toLocaleString("en-US")}`
               : `UGX ${Math.max(500, Math.round(amountNum * (config?.usdUgxRate ?? 3750))).toLocaleString("en-US")}`}
           </span>
         </div>
