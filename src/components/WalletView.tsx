@@ -672,7 +672,14 @@ function MoneyForm({
       });
       const json = await res.json();
       if (!res.ok) {
-        setMsg({ text: json.error || "Request failed.", ok: false });
+        // Never trust `error` to be a string — some providers nest it as an
+        // object ({message,type}); rendering that as a React child would crash
+        // the page. Coerce to a readable string.
+        const errText =
+          typeof json?.error === "string"
+            ? json.error
+            : json?.error?.message || json?.message || "Request failed.";
+        setMsg({ text: errText, ok: false });
       } else if (json.mpesa && json.checkoutRequestId) {
         // M-Pesa: show the live STK status (PIN prompt → paid / cancelled).
         if (needsPhone) rememberPhone(reference);

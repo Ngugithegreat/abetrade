@@ -58,7 +58,18 @@ async function call<T = any>(
     });
     const json = (await res.json().catch(() => ({}))) as any;
     if (res.ok) return { ok: true, data: json as T };
-    return { ok: false, code: json?.type || json?.code, error: json?.message || json?.error || `Payment error (HTTP ${res.status}).` };
+    // TeronaPay error envelopes vary: sometimes {message,type} at the top level,
+    // sometimes nested as {error:{message,type}}. Always resolve to a STRING —
+    // returning an object here would get rendered as a React child and crash the
+    // client ("Objects are not valid as a React child").
+    const errObj = json?.error;
+    const rawMsg =
+      json?.message ||
+      (errObj && typeof errObj === "object" ? errObj.message : errObj) ||
+      `Payment error (HTTP ${res.status}).`;
+    const code =
+      json?.type || json?.code || (errObj && typeof errObj === "object" ? errObj.type : undefined);
+    return { ok: false, code, error: typeof rawMsg === "string" ? rawMsg : `Payment error (HTTP ${res.status}).` };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Could not reach the payment provider." };
   }
