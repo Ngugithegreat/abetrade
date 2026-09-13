@@ -170,15 +170,18 @@ export async function POST(req: Request) {
     });
   }
 
-  // ---- Automated payout via TeronaPay (UGX/TZS mobile money, and KES only when
-  // no dedicated M-Pesa B2C paybill is set). When MPESA_B2C_* is configured, KES
-  // withdrawals are sent via Daraja B2C below instead (TeronaPay payouts unstable).
-  if (
-    automated &&
-    phone &&
-    isTeronaConfigured() &&
-    !(method === "mpesa" && isB2cConfigured())
-  ) {
+  // Payout rail selection for KES / M-Pesa. TeronaPay is the default; the
+  // dedicated Daraja B2C paybill is used only when PAYOUT_RAIL=b2c (and it's
+  // configured), or as a fallback when TeronaPay isn't configured at all. This
+  // lets us flip rails via one env var without deleting the other's credentials.
+  const preferB2cForMpesa =
+    method === "mpesa" &&
+    isB2cConfigured() &&
+    ((process.env.PAYOUT_RAIL || "").trim().toLowerCase() === "b2c" || !isTeronaConfigured());
+
+  // ---- Automated payout via TeronaPay (UGX/TZS mobile money, and KES unless the
+  // B2C paybill is explicitly selected via PAYOUT_RAIL=b2c) ----
+  if (automated && phone && isTeronaConfigured() && !preferB2cForMpesa) {
     const currency = isTzPayout ? "TZS" : isUgPayout ? "UGX" : "KES";
     const localAmount = isTzPayout ? centsToTzs(amount) : isUgPayout ? centsToUgx(amount) : centsToKesWithdraw(amount);
     const idem = `wdl_${session.id}_${randomUUID().slice(0, 12)}`;
