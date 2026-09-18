@@ -263,9 +263,20 @@ export function withdrawRail(): Rail | null {
   return readRail("WITHDRAW_PROVIDER", "PAYMENT_PROVIDER");
 }
 const MOBILE_METHODS = ["mpesa", "mtn", "airtel", "tzmobile"];
-export function useDusupayForDeposit(method: string): boolean {
-  return depositRail() === "dusupay" && isDusupayConfigured() && MOBILE_METHODS.includes(method);
+
+// Safety valve for testing DusuPay on a LIVE site: with DUSUPAY_TEST_ONLY set,
+// the DusuPay rail is used only for test accounts (is_test / TEST_EMAILS); every
+// real user keeps the default rail. Lets us sandbox-test on production without
+// touching real deposits/withdrawals. Unset ⇒ the switch applies to everyone.
+export function dusupayTestOnly(): boolean {
+  const v = (process.env.DUSUPAY_TEST_ONLY || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
 }
-export function useDusupayForWithdraw(method: string): boolean {
-  return withdrawRail() === "dusupay" && isDusupayConfigured() && MOBILE_METHODS.includes(method);
+export function useDusupayForDeposit(method: string, isTester = false): boolean {
+  if (depositRail() !== "dusupay" || !isDusupayConfigured() || !MOBILE_METHODS.includes(method)) return false;
+  return !dusupayTestOnly() || isTester;
+}
+export function useDusupayForWithdraw(method: string, isTester = false): boolean {
+  if (withdrawRail() !== "dusupay" || !isDusupayConfigured() || !MOBILE_METHODS.includes(method)) return false;
+  return !dusupayTestOnly() || isTester;
 }

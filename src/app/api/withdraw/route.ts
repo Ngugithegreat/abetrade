@@ -58,7 +58,7 @@ export async function POST(req: Request) {
 
   const isUgPayout = method === "mtn" || method === "airtel";
   const isTzPayout = method === "tzmobile";
-  const dusupayW = useDusupayForWithdraw(method);
+  const dusupayW = useDusupayForWithdraw(method, isTestEmail(session.email));
   const automated =
     (method === "mpesa" && (isTeronaConfigured() || isB2cConfigured() || dusupayW)) ||
     ((isUgPayout || isTzPayout) && (isTeronaConfigured() || dusupayW));

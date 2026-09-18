@@ -20,6 +20,7 @@ import {
 } from "@/lib/paystack";
 import QRCode from "qrcode";
 import { isCryptoConfigured, createPayment, isSupportedCoin, CRYPTO_MIN_USD } from "@/lib/crypto-pay";
+import { isTestEmail } from "@/lib/testmode";
 import { isTeronaConfigured, createPayment as teronaCreatePayment } from "@/lib/teronapay";
 import {
   useDusupayForDeposit,
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
   // ---------- Mobile money via DusuPay (KES/UGX/TZS) — when selected ----------
   // Chosen with DEPOSIT_PROVIDER=dusupay (or PAYMENT_PROVIDER=dusupay). Falls
   // through to the existing rails when not selected or not configured.
-  if (useDusupayForDeposit(method)) {
+  if (useDusupayForDeposit(method, isTestEmail(session.email))) {
     const phone =
       method === "tzmobile"
         ? normalizeTzPhone(reference)
