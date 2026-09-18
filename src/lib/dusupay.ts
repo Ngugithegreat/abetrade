@@ -9,8 +9,9 @@ import { createHmac, timingSafeEqual, randomBytes } from "crypto";
 // central callback routes the result back to the right site by that prefix.
 //
 // Env:
-//   DUSUPAY_PUBLIC_KEY      public key            (header: public-key)
-//   DUSUPAY_SECRET_KEY      signing / secret key  (header: secret-key; also verifies callbacks)
+//   DUSUPAY_PUBLIC_KEY      public key     (header: public-key)
+//   DUSUPAY_SECRET_KEY      secret key     (header: secret-key, payouts)
+//   DUSUPAY_SIGNING_KEY     signing key    (verifies callback HMAC signatures)
 //   DUSUPAY_ENV             "production" | "sandbox"   (default: sandbox)
 //   DUSUPAY_IPN_TOKEN       opaque path segment used in the neutral callback URL
 //   SITE_CODE               2-char code identifying THIS site in merchant_reference (e.g. "sn")
@@ -29,13 +30,20 @@ function base(): string {
 }
 
 export function isDusupayConfigured(): boolean {
-  return !!(process.env.DUSUPAY_PUBLIC_KEY && process.env.DUSUPAY_SECRET_KEY);
+  return !!(
+    process.env.DUSUPAY_PUBLIC_KEY &&
+    process.env.DUSUPAY_SECRET_KEY &&
+    process.env.DUSUPAY_SIGNING_KEY
+  );
 }
 function pub(): string {
   return (process.env.DUSUPAY_PUBLIC_KEY || "").trim();
 }
-function signingKey(): string {
+function secretKey(): string {
   return (process.env.DUSUPAY_SECRET_KEY || "").trim();
+}
+function signingKey(): string {
+  return (process.env.DUSUPAY_SIGNING_KEY || "").trim();
 }
 
 // This deployment's 2-char site code — the prefix on every merchant_reference,
@@ -93,7 +101,7 @@ async function call<T = any>(
     "x-api-version": "1",
     "public-key": pub(),
   };
-  if (withSecret) headers["secret-key"] = signingKey();
+  if (withSecret) headers["secret-key"] = secretKey();
   try {
     const res = await fetch(`${base()}${path}`, {
       method: "POST",
