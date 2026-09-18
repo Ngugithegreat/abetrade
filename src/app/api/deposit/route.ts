@@ -22,6 +22,13 @@ import QRCode from "qrcode";
 import { isCryptoConfigured, createPayment, isSupportedCoin, CRYPTO_MIN_USD } from "@/lib/crypto-pay";
 import { isTeronaConfigured, createPayment as teronaCreatePayment } from "@/lib/teronapay";
 import {
+  useDusupayForDeposit,
+  dusupayCreateCollection,
+  dusupayCurrency,
+  dusupayProviderCode,
+  newMerchantRef,
+} from "@/lib/dusupay";
+import {
   isCollectoConfigured,
   normalizeUgPhone,
   centsToUgx,
@@ -59,6 +66,65 @@ export async function POST(req: Request) {
   const sql = db();
   const base = callbackBase(req.url);
   const usd = amount / 100;
+
+  // ---------- Mobile money via DusuPay (KES/UGX/TZS) — when selected ----------
+  // Chosen with DEPOSIT_PROVIDER=dusupay (or PAYMENT_PROVIDER=dusupay). Falls
+  // through to the existing rails when not selected or not configured.
+  if (useDusupayForDeposit(method)) {
+    const phone =
+      method === "tzmobile"
+        ? normalizeTzPhone(reference)
+        : method === "mtn" || method === "airtel"
+        ? normalizeUgPhone(reference)
+        : normalizePhone(reference);
+    if (!phone) {
+      return NextResponse.json({ error: "Enter a valid phone number." }, { status: 400 });
+    }
+    const recent = (await sql`
+      SELECT 1 FROM abetrade_transactions
+      WHERE user_id = ${session.id} AND type = 'deposit' AND method = ${method}
+        AND status != 'rejected' AND created_at > now() - interval '5 minutes' LIMIT 1
+    `) as any[];
+    if (recent.length) {
+      return NextResponse.json(
+        { error: "Please wait a few minutes before requesting another prompt." },
+        { status: 429 }
+      );
+    }
+    const currency = dusupayCurrency(method);
+    const localAmount =
+      currency === "UGX" ? centsToUgx(amount) : currency === "TZS" ? centsToTzs(amount) : centsToKes(amount);
+    const dp = await dusupayCreateCollection({
+      merchantReference: newMerchantRef(),
+      amount: localAmount,
+      currency,
+      providerCode: dusupayProviderCode(method),
+      msisdn: phone,
+      description: `${BRAND_NAME} wallet top-up`,
+      customerName: session.name,
+      customerEmail: session.email,
+    });
+    if (!dp.ok) {
+      return NextResponse.json({ error: dp.error || "Could not start the prompt. Try again." }, { status: 502 });
+    }
+    const rows = (await sql`
+      INSERT INTO abetrade_transactions
+        (user_id, type, amount, status, method, reference, provider_ref, note)
+      VALUES
+        (${session.id}, 'deposit', ${amount}, 'pending', ${method}, ${phone},
+         ${dp.data.internal_reference}, ${`${BRAND_NAME} wallet top-up · ${currency} ${localAmount}`})
+      RETURNING *
+    `) as any[];
+    return NextResponse.json({
+      ok: true,
+      mpesa: true,
+      dusupay: true,
+      amountKes: localAmount,
+      checkoutRequestId: dp.data.internal_reference,
+      transaction: rows[0],
+      message: "Check your phone and approve the prompt to complete.",
+    });
+  }
 
   // ---------- M-Pesa via TeronaPay (KES · STK Push) ----------
   if (method === "mpesa" && isTeronaConfigured()) {

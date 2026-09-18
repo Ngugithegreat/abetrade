@@ -3,6 +3,12 @@ import { randomUUID } from "crypto";
 import { db, ensureSchema } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { isTeronaConfigured, createPayout as teronaCreatePayout } from "@/lib/teronapay";
+import {
+  useDusupayForWithdraw,
+  dusupayCreatePayout,
+  dusupayProviderCode,
+  newMerchantRef,
+} from "@/lib/dusupay";
 import { normalizeUgPhone, centsToUgx, normalizeTzPhone, centsToTzs } from "@/lib/collecto";
 import { isBlocked, isWithdrawBlocked, getWithdrawDailyCount, getWithdrawDailyMaxCents } from "@/lib/settings";
 import { sendEmail, withdrawalReceiptEmail } from "@/lib/email";
@@ -52,9 +58,10 @@ export async function POST(req: Request) {
 
   const isUgPayout = method === "mtn" || method === "airtel";
   const isTzPayout = method === "tzmobile";
+  const dusupayW = useDusupayForWithdraw(method);
   const automated =
-    (method === "mpesa" && (isTeronaConfigured() || isB2cConfigured())) ||
-    ((isUgPayout || isTzPayout) && isTeronaConfigured());
+    (method === "mpesa" && (isTeronaConfigured() || isB2cConfigured() || dusupayW)) ||
+    ((isUgPayout || isTzPayout) && (isTeronaConfigured() || dusupayW));
 
   // Validate the phone BEFORE reserving funds for automated payouts.
   let phone: string | null = null;
@@ -167,6 +174,56 @@ export async function POST(req: Request) {
       transaction: rows[0],
       balance: balanceAfter,
       message: "Withdrawal is being sent. It usually arrives within a minute.",
+    });
+  }
+
+  // ---- Automated payout via DusuPay (KES/UGX/TZS mobile money) — when selected
+  // with WITHDRAW_PROVIDER=dusupay. Takes priority over TeronaPay/B2C; falls
+  // through to them when not selected or not configured. ----
+  if (dusupayW && phone) {
+    const currency = isTzPayout ? "TZS" : isUgPayout ? "UGX" : "KES";
+    const localAmount = isTzPayout
+      ? centsToTzs(amount)
+      : isUgPayout
+      ? centsToUgx(amount)
+      : centsToKesWithdraw(amount);
+    const dp = await dusupayCreatePayout({
+      merchantReference: newMerchantRef(),
+      amount: localAmount,
+      currency,
+      providerCode: dusupayProviderCode(method),
+      accountNumber: phone,
+      customerName: session.name || "Customer",
+      description: `${BRAND_NAME} payout`,
+    });
+    if (!dp.ok) {
+      // Rejected at submission (e.g. low float) — refund immediately so the
+      // client is never left debited for a payout that never went out.
+      await sql`UPDATE abetrade_users SET balance = balance + ${amount} WHERE id = ${session.id}`;
+      return NextResponse.json(
+        { error: dp.error || "Could not send the payout. You were not charged." },
+        { status: 502 }
+      );
+    }
+    const rows = (await sql`
+      INSERT INTO abetrade_transactions
+        (user_id, type, amount, status, method, reference, provider_ref, note)
+      VALUES
+        (${session.id}, 'withdrawal', ${-amount}, 'pending', ${method}, ${phone},
+         ${dp.data.internal_reference}, ${`${BRAND_NAME} payout · ${currency} ${localAmount}`})
+      RETURNING *
+    `) as any[];
+    {
+      const mail = withdrawalReceiptEmail(session.name, amount / 100, phone);
+      void sendEmail({ to: session.email, subject: mail.subject, html: mail.html, text: mail.text }).catch(() => {});
+    }
+    return NextResponse.json({
+      ok: true,
+      mpesa: true,
+      amountKes: localAmount,
+      transaction: rows[0],
+      balance: balanceAfter,
+      message: "Withdrawal is being sent to your phone. It usually arrives within a minute.",
     });
   }
 
