@@ -34,6 +34,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: BRAND_HEX_DARK,
+  // Lock the app to the device screen: fit to width, no user pinch/double-tap
+  // zoom and no auto-zoom (e.g. iOS zooming into inputs). The app is designed to
+  // fit any screen without the user having to zoom in or out.
+  width: "device-width",
+  initialScale: 1,
+  minimumScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

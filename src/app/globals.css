@@ -55,6 +55,11 @@ body {
   color: rgb(var(--fg));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Fit to the screen: never let content force a wider-than-screen layout (which
+     makes the browser shrink/zoom the page), and stop mobile text auto-sizing. */
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
